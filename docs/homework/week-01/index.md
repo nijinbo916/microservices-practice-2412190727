@@ -120,7 +120,13 @@ Docker Compose version v5.5.1
 ## 四、Git 提交记录
 
 ```
-（git log --oneline --graph 输出将在完成提交后更新到此）
+$ git log --oneline --graph
+* 637a9c0 docs(week-01): 完成环境检查、概念回答与 Docker 问题记录
+* 48d942b docs: 完善 README，补充课程信息、个人身份与仓库用途说明
+* c609eb4 Create .gitkeep
+* ccd34eb Create .gitkeep
+* 86f0963 Create index.md
+* 961cc6b Initial commit
 ```
 
 提交记录截图见 [screenshots/](screenshots/) 目录。
