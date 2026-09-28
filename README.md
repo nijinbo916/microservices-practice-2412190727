@@ -140,19 +140,83 @@ flowchart TD
 
 ---
 
+## 四、运行说明
+
+### 4.1 环境要求
+
+| 要求 | 版本 |
+| --- | --- |
+| Java | 25（开发机实际使用 JDK 27 运行，编译目标为 Java 25） |
+| Maven | 无需本机安装，使用工程自带的 Maven Wrapper（`./mvnw`） |
+| Spring Boot | 4.0.8 |
+| 端口 | 8080（默认端口，未做修改） |
+
+### 4.2 启动与测试命令
+
+```bash
+# 进入单体工程目录
+cd monolith
+
+# 启动应用
+./mvnw spring-boot:run
+# Windows CMD/PowerShell 使用：mvnw.cmd spring-boot:run
+
+# 运行测试（启动测试 + 接口验证测试）
+./mvnw test
+```
+
+### 4.3 可访问地址
+
+| 用途 | 地址 | 预期结果 |
+| --- | --- | --- |
+| 运行状态验证（问候接口） | http://localhost:8080/api/hello | 200，返回项目名称与 `"status":"RUNNING"` |
+| 健康检查（Actuator） | http://localhost:8080/actuator/health | 200，`"status":"UP"` |
+
+示例响应：
+
+```json
+{
+  "project": "萌宠诊所 · 宠物医院管理系统",
+  "message": "萌宠诊所服务已启动，欢迎使用！",
+  "status": "RUNNING",
+  "time": "2026-09-28T14:02:13.792585"
+}
+```
+
+### 4.4 当前尚未实现的业务能力
+
+当前工程仅为可运行骨架，**尚未实现**以下内容（按课程进度后续逐步完成）：
+
+- 业务建模与数据库持久化（宠物、主人、医生、预约、病历、账单、药品等实体）
+- 业务 REST API、Service 层、Repository 层与分层架构
+- 认证与授权（JWT + RBAC，主人 / 医生 / 管理员三种角色）
+- 预约提醒、库存预警等消息通知
+- 分布式事务、服务拆分、服务注册与网关
+- 监控与日志聚合、容器化部署
+
+选题与功能规划见 [docs/project-proposal.md](docs/project-proposal.md)，
+第 3 周工程与运行验证记录见 [docs/homework/week-03/index.md](docs/homework/week-03/index.md)。
+
+---
+
 ## 附：仓库说明
 
 ### 目录结构
 
 ```
 .
-├── README.md                     # 项目入口：背景、功能设计与演进方向
+├── README.md                     # 项目入口：背景、功能设计、运行说明与演进方向
+├── monolith/                     # 第 03 周创建的单体 Spring Boot 工程（可独立运行）
+│   ├── pom.xml                   # Spring Boot 4.0.8 + Java 25 + Web + Actuator
+│   ├── mvnw / mvnw.cmd           # Maven Wrapper
+│   └── src/                      # 启动类、接口、配置与测试代码
 ├── docs/
+│   ├── project-proposal.md       # 项目提案：目标用户、优先场景、两个核心模型
 │   └── homework/
 │       ├── week-01/              # 第 1 周：环境检查与概念回答
-│       └── week-02/              # 第 2 周：项目选题与功能规划
-│           └── screenshots/      # README 渲染截图
-└── src/                          # 后续课程项目的源代码
+│       ├── week-02/              # 第 2 周：项目选题与功能规划
+│       └── week-03/              # 第 3 周：Spring Boot 工程创建与运行验证
+└── src/                          # （历史占位目录，后续服务拆分时使用）
 ```
 
 ### 开发环境一览（第 1 周检查结果）
