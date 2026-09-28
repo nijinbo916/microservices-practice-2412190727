@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: petclinic-monolith
+
+# 服务器配置：默认端口 8080（课程要求，未做修改）
+server:
+  port: 8080
+
+# 项目自定义配置，供 /api/hello 接口读取
+app:
+  project:
+    name: 萌宠诊所 · 宠物医院管理系统
+
+# Actuator 健康检查：暴露 health 端点，便于验证运行状态
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info
