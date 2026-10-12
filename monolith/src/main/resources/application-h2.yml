@@ -1,0 +1,32 @@
+# ----------------------------------------------------------------------
+# h2 profile：使用 H2 内存数据库，便于在没有 MySQL 的环境下快速演示。
+# 启动方式：./mvnw spring-boot:run -Dspring-boot.run.profiles=h2
+# 控制台：http://localhost:8080/h2-console  （JDBC URL: jdbc:h2:mem:petclinic）
+#
+# 注意：课程要求的运行数据库是 MySQL（见 application.yml）。
+# 本 profile 仅作为无 MySQL 环境时的替代与课堂演示使用。
+# ----------------------------------------------------------------------
+spring:
+  datasource:
+    url: jdbc:h2:mem:petclinic;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    # 让 data.sql 在 Hibernate 建表之后执行
+    defer-datasource-initialization: true
+    show-sql: true
+
+  # 内嵌数据库默认即启用，此处显式写出便于阅读
+  sql:
+    init:
+      mode: embedded
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console

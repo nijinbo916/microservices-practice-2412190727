@@ -1,0 +1,30 @@
+# ----------------------------------------------------------------------
+# test profile：单元测试专用配置（H2 内存数据库）
+#
+# - 不依赖本机 MySQL，任何机器上 ./mvnw test 都能直接跑通
+# - ddl-auto=create-drop：每次测试运行重建表结构
+# - defer-datasource-initialization + sql.init.mode=always：
+#   让 data.sql 在 Hibernate 建表之后自动执行，实现「可重复的测试数据准备」
+# ----------------------------------------------------------------------
+spring:
+  datasource:
+    url: jdbc:h2:mem:petclinic-test;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    defer-datasource-initialization: true
+    open-in-view: false
+    show-sql: false
+
+  sql:
+    init:
+      mode: always
+
+logging:
+  level:
+    root: warn

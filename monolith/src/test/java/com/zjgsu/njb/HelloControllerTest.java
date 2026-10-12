@@ -3,6 +3,7 @@ package com.zjgsu.njb;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -19,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>使用 JDK 原生 HttpClient，不依赖具体测试框架客户端 API，可重复运行。</p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
 class HelloControllerTest {
 
     @LocalServerPort

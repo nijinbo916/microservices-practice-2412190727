@@ -2,6 +2,30 @@ spring:
   application:
     name: petclinic-monolith
 
+  # ------------------------------------------------------------------
+  # 数据源：默认接入本地 MySQL（第 04 周要求）
+  # 建库语句：CREATE DATABASE petclinic DEFAULT CHARACTER SET utf8mb4;
+  # 连接参数可用环境变量覆盖：DB_URL / DB_USERNAME / DB_PASSWORD
+  # ------------------------------------------------------------------
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/petclinic?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ------------------------------------------------------------------
+  # JPA / Hibernate
+  # ddl-auto=update：启动时按实体自动补建/更新表结构（开发阶段使用）
+  # ------------------------------------------------------------------
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
 # 服务器配置：默认端口 8080（课程要求，未做修改）
 server:
   port: 8080
