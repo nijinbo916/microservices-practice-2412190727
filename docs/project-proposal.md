@@ -3,14 +3,16 @@
 - **姓名**：倪金博
 - **学号**：2412190727
 - **项目名称**：萌宠诊所 · 宠物医院管理系统
-- **文档日期**：2026-09-28（第 03 周）
+- **基础包名**：`com.zjgsu.njb`
+- **文档更新日期**：2026-10-12（第 04 周）
+
+> 选题与第 02 周 README、[week-02 作业文档](../homework/week-02/index.md)保持一致，本学期不再更换题目。
+> 本文档按周次持续更新：第 03 周确定工程骨架，第 04 周落实业务建模与持久化。
 
 ## 一、项目名称与简述
 
 **萌宠诊所 · 宠物医院管理系统**：把「预约 → 接诊 → 病历 → 处方 → 收费」这条宠物就诊的完整业务链搬到线上，
-让宠物主人、医生和管理员各有一套清晰的操作界面，所有数据可查、可追、可统计。
-
-选题与第 02 周 README、[week-02 作业文档](../homework/week-02/index.md)保持一致，本学期不再更换题目。
+让宠物主人、医生和管理员各有一套清晰的操作入口，所有数据可查、可追、可统计。
 
 ## 二、目标用户及其需求
 
@@ -20,60 +22,113 @@
 | 医生 / 护士 | 查看当日排班与预约队列、书写电子病历、开具处方、标记复诊 |
 | 前台 / 管理员 | 管理医生排班与号源、办理登记与收费、维护药品库存、查看经营统计 |
 
-## 三、本周（第 03 周）优先实现的业务场景
+## 三、核心业务流程与实体模型（第 04 周）
 
-**优先场景：宠物主人为宠物发起一次预约，并能在就诊后查看该次就诊的病历。**
+### 3.1 本周实现的核心业务流程：宠物预约就诊
 
-选择理由：该场景同时串起「宠物档案」「预约」「病历」三个模块，是整条主流程的起点与终点，
-数据实体之间的关系最典型，适合作为后续数据库持久化与服务拆分的第一个切入场景。
+**流程描述（预约段）**：
 
-**本周实现范围（第 03 周只做工程骨架，不做业务实现）**：
+```mermaid
+flowchart LR
+    A["宠物主人\n提交预约申请"] --> B{"宠物是否已建档？"}
+    B -- 否 --> B1["先办理宠物建档\nPOST /api/pets"]
+    B1 --> C
+    B -- 是 --> C["校验预约时段是否在未来\n且结束晚于开始"]
+    C --> D{"该医生该时段\n是否已有有效预约？"}
+    D -- 是 --> D1["拒绝：409 号源冲突"]
+    D -- 否 --> E{"该医生当日预约数\n是否已达号源上限？"}
+    E -- 是 --> E1["拒绝：409 号源已满"]
+    E -- 否 --> F["创建预约\n状态 = BOOKED"]
+    F --> G["主人可查询自己的预约列表"]
+    G --> H["如需变更\nPOST /api/appointments/{id}/cancel\n状态 = CANCELED，释放号源"]
+```
 
-- ✅ 创建可运行的 Maven + Spring Boot 工程（`monolith/`）
-- ✅ 基础配置（`application.yml`）、启动类、Spring Web MVC 与 Actuator 依赖
-- ✅ 一个用于验证运行状态的 GET 接口 `/api/hello`，以及 `/actuator/health` 健康检查
-- ✅ `@SpringBootTest` 启动测试与接口验证测试，可重复运行
-- ⬜ 不做：业务建模、完整 REST API、Service、Repository、数据库（后续周次实现）
+该流程是整条就诊链的**入口段**：主人提交预约、系统校验号源、预约单落库。
+后续周次会在这条链上继续接上「到店登记 → 医生接诊 → 电子病历 → 处方 → 收费」。
 
-## 四、两个核心模型（仅规划，本周不实现）
+### 3.2 参与流程的业务实体及其关系
 
-### 4.1 Pet（宠物）
+本周落地 3 个实体，其中 `Pet` 与 `Appointment` 是流程的两个核心实体，`Doctor` 是号源资源：
 
-宠物是本系统所有业务围绕的主体，病历、预约、收费都必须先关联到具体的宠物。
+```mermaid
+erDiagram
+    PET ||--o{ APPOINTMENT : "发起预约（多对一）"
+    DOCTOR ||--o{ APPOINTMENT : "承接接诊（多对一）"
 
-| 字段 | 说明 |
-| --- | --- |
-| id | 宠物唯一标识 |
-| name | 宠物昵称 |
-| species / breed | 物种（犬/猫等）与品种 |
-| birthday / weight | 出生日期与体重 |
-| ownerId | 所属主人（关联 Owner） |
-| chipNo | 芯片号（可空） |
-| allergyHistory | 过敏史（关系到用药安全） |
+    PET {
+        bigint id PK
+        string name "宠物昵称"
+        string species "物种"
+        string owner_name "主人姓名"
+        string allergy_history "过敏史"
+    }
+    DOCTOR {
+        bigint id PK
+        string name "医生姓名"
+        string specialty "擅长方向"
+        int daily_capacity "每日号源上限"
+    }
+    APPOINTMENT {
+        bigint id PK
+        bigint pet_id FK
+        bigint doctor_id FK
+        datetime slot_start "预约开始"
+        datetime slot_end "预约结束"
+        string status "BOOKED/CHECKED_IN/COMPLETED/CANCELED"
+        string reason "就诊原因"
+    }
+```
 
-### 4.2 Appointment（预约）
+| 实体 | 在流程中的角色 | 关系 |
+| --- | --- | --- |
+| `Pet` 宠物档案 | 流程主体：**谁**来看病 | 一只宠物 → 多条预约（1 : N） |
+| `Doctor` 医生 | 流程资源：**谁**接诊、**放多少号** | 一位医生 → 多条预约（1 : N） |
+| `Appointment` 预约单 | 流程载体：把宠物、医生、时段绑定在一起 | 多对一指向 `Pet` 与 `Doctor` |
 
-预约是业务主流程的入口，连接宠物（谁来看病）、医生（谁来接诊）与时间段（什么时候来）。
+**为什么把「时段」放在预约单上而不是给宠物或医生加字段？**
+因为「占用」是宠物与医生之间的**关系属性**，只能存在于连接两者的预约记录里。
+把它放在预约单上，同一只宠物找不同医生、同一医生接不同宠物，都不会互相干扰。
 
-| 字段 | 说明 |
-| --- | --- |
-| id | 预约唯一标识 |
-| petId | 就诊宠物（关联 Pet） |
-| doctorId | 接诊医生（关联 Doctor） |
-| slotStart / slotEnd | 预约时段（用于防止同一时段号源超卖） |
-| status | 状态：BOOKED / CHECKED_IN / COMPLETED / CANCELED |
-| reason | 就诊原因（主人自述） |
-| createdAt | 创建时间 |
+### 3.3 需要在 Service 中检查的业务规则
 
-> 后续周次将补充 Owner、Doctor、MedicalRecord、Prescription、Bill、Medicine 等模型。
+本周在 `AppointmentService` 中实现 4 条规则，其中最核心的一条是：
 
-## 五、演进路线（与课程主题对应）
+> **业务规则（核心）：同一医生在同一时段不能存在两条有效预约 —— 防止号源超卖。**
+>
+> 判定方式：在 `AppointmentRepository` 中按「区间重叠」查询该医生已占用号源的预约数：
+> `已有.slotStart < 新.slotEnd AND 已有.slotEnd > 新.slotStart`，
+> 且仅统计状态为 `BOOKED` / `CHECKED_IN` 的预约（已取消、已完成的预约会释放号源）。
+> 命中时抛出 `BusinessRuleException`，由全局异常处理器转换为 **HTTP 409 Conflict**。
+
+其余 3 条规则：
+
+| # | 规则 | 触发结果 |
+| --- | --- | --- |
+| 1 | 预约时段必须合法：结束时间晚于开始时间 | 400 Bad Request |
+| 2 | 预约开始时间必须在未来（`@Future`） | 400 Bad Request |
+| 3 | 某医生当日有效预约数不得超过其 `daily_capacity` | 409 号源已满 |
+| 4 | 已取消 / 已完成的预约不能再次取消 | 409 状态非法 |
+
+> 为什么这些规则要写在 Service 而不是数据库唯一约束里？
+> 「时段重叠」是区间比较而非等值比较，唯一索引表达不了；同时已取消的预约应当释放号源，
+> 而唯一约束无法感知状态。因此规则落在 Service，数据库层用普通索引保证查询效率。
+
+## 四、里程碑与演进路线
+
+| 周次 | 里程碑 | 状态 |
+| --- | --- | --- |
+| 第 03 周 | 建立可运行的 Spring Boot 工程骨架、`/api/hello` 与健康检查、启动测试 | ✅ 已完成 |
+| **第 04 周** | **业务建模 + 分层实现（model / repository / service / controller）+ MySQL 持久化 + 完整测试** | ✅ 本周完成 |
+| 第 05 周起 | 病历与处方、认证授权、服务拆分、消息与事务、监控与部署 | ⬜ 待进行 |
 
 | 课程主题 | 在本项目中的落点 |
 | --- | --- |
-| 数据库持久化 | Pet / Appointment / MedicalRecord 等实体的表设计与 JPA/MyBatis 持久化 |
+| 数据库持久化（第 04 周） | Pet / Doctor / Appointment 三表设计 + Spring Data JPA 读写 + MySQL 接入 |
+| 病历与处方 | 新增 `medical_record`、`prescription`，与预约一对一 |
 | 认证与授权 | 主人 / 医生 / 管理员三种角色的登录鉴权（JWT + RBAC） |
 | 服务拆分 | 按模块边界拆为：预约服务、病历服务、收费服务、库存服务、档案服务 |
 | 消息队列 | 预约成功提醒、低库存预警、账单生成等异步事件通知 |
 | 分布式事务 | 「处方出库 + 收费入账」的最终一致性（Saga / 本地消息表） |
 | 监控与部署 | 接口监控与日志聚合，Docker Compose 一键部署 |
+
+详细表结构见 [docs/database.md](../database.md)，本周实现记录见 [week-04 作业文档](../homework/week-04/index.md)。
