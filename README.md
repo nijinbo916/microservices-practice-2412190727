@@ -244,22 +244,164 @@ curl -i -X POST http://localhost:8080/api/appointments/1/cancel
 - 宠物档案的修改 / 注销、医生排班管理
 - 认证与授权（JWT + RBAC，主人 / 医生 / 管理员三种角色）
 - 预约提醒、库存预警等消息通知；分布式事务、服务拆分、服务注册与网关
-- 监控与日志聚合、容器化部署
+- 监控与日志聚合
 
 选题与功能规划见 [docs/project-proposal.md](docs/project-proposal.md)，数据库设计见 [docs/database.md](docs/database.md)；
 第 3 周工程与运行验证记录见 [docs/homework/week-03/index.md](docs/homework/week-03/index.md)，
-第 4 周实现记录见 [docs/homework/week-04/index.md](docs/homework/week-04/index.md)。
+第 4 周实现记录见 [docs/homework/week-04/index.md](docs/homework/week-04/index.md)，
+第 5 周容器化记录见 [docs/homework/week-05/index.md](docs/homework/week-05/index.md)。
+
+---
+
+## 五、Docker 容器化部署（第 05 周）
+
+整套系统可以只用 Docker 一键跑起来：应用镜像由 `monolith/Dockerfile` 多阶段构建，
+数据库用 `mysql:8.4.11`，两者由根目录 `compose.yaml` 编排。
+
+```
+.
+├── compose.yaml          # 编排：app + mysql，共享网络 + 命名数据卷
+├── .env.example          # 环境变量模板（复制成 .env 后按需改密码）
+└── monolith/
+    ├── Dockerfile        # 多阶段构建：maven 编译 → jre 运行
+    └── .dockerignore     # 排除 target/、.git/、IDE 配置与密码文件
+```
+
+### 5.1 前置要求
+
+| 组件 | 版本 |
+| --- | --- |
+| Docker Engine / Docker Desktop | 24+（本机实测 29.8.0） |
+| Docker Compose | V2（本机实测 v5.5.1，使用 `docker compose` 而非旧的 `docker-compose`） |
+
+本机**不需要**安装 Java、Maven 或 MySQL：编译在 Maven 镜像里完成，数据库跑在容器里。
+
+### 5.2 第一步：准备环境变量
+
+```bash
+# 在仓库根目录执行
+cp .env.example .env
+```
+
+`.env` 里有数据库账号密码与端口映射，已在 `.gitignore` 中忽略，不会提交到仓库。
+若本机 3306/8080 已被占用，改 `.env` 里的 `MYSQL_PORT` / `APP_PORT` 即可。
+
+| 变量 | 示例值 | 作用 |
+| --- | --- | --- |
+| `MYSQL_DATABASE` | `petclinic` | 首次启动时自动创建的库名 |
+| `MYSQL_USER` / `MYSQL_PASSWORD` | `petclinic` / `change_me_petclinic` | 应用连接数据库使用的账号 |
+| `MYSQL_ROOT_PASSWORD` | `change_me_root` | MySQL root 密码 |
+| `DB_URL` | `jdbc:mysql://mysql:3306/petclinic?...` | 应用 JDBC 连接串，主机名 `mysql` 即服务名 |
+| `APP_PORT` / `MYSQL_PORT` | `8080` / `3306` | 映射到宿主机的端口 |
+
+### 5.3 第二步：构建应用镜像
+
+```bash
+docker build -t petclinic-monolith:week05 ./monolith
+```
+
+`-t` 指定镜像名与标签，`./monolith` 是构建上下文（`.dockerignore` 生效于此）。
+镜像内部分两个阶段：`maven:3.9-eclipse-temurin-25` 负责编译打包，
+`eclipse-temurin:25-jre` 只接收最终 JAR 并以非 root 用户运行，所以最终镜像不含 Maven 与 JDK。
+
+查看镜像：
+
+```bash
+docker images petclinic-monolith
+docker history petclinic-monolith:week05
+```
+
+### 5.4 第三步：一键启动
+
+```bash
+docker compose up -d --build
+```
+
+启动顺序：`mysql` 容器启动 → 健康检查 `mysqladmin ping` 通过 → `app` 容器才启动。
+应用通过 compose 内的服务名 `mysql` 解析到数据库，不依赖宿主机 IP。
+
+### 5.5 第四步：查看状态与日志
+
+```bash
+# 两个服务都应为 running；mysql / app 的 STATUS 列会显示 (healthy)
+docker compose ps
+
+# 跟踪应用启动日志（看到 Tomcat started on port 8080 即启动完成）
+docker compose logs -f app
+
+# 只看最近 50 行
+docker compose logs --tail 50 app
+```
+
+### 5.6 第五步：验证接口
+
+> 下面的示例默认 `APP_PORT=8080`。若你在 `.env` 中改过端口（例如本机 8080 被占用改成 8081），
+> 请把命令里的 8080 替换成对应端口。
+
+```bash
+# 健康检查：status=UP，且 components.db 显示 MySQL
+curl -s http://localhost:8080/actuator/health
+
+# 业务接口 1：宠物建档 → 201 Created
+curl -i -X POST http://localhost:8080/api/pets \
+  -H "Content-Type: application/json" \
+  -d '{"name":"豆豆","species":"犬","breed":"金毛","ownerName":"倪先生","ownerPhone":"13800000001","birthday":"2021-05-20","weightKg":28.50,"allergyHistory":"青霉素过敏"}'
+
+# 业务接口 2：创建预约 → 201 Created（号源规则校验通过）
+curl -i -X POST http://localhost:8080/api/appointments \
+  -H "Content-Type: application/json" \
+  -d '{"petId":1,"doctorId":1,"slotStart":"2026-11-02T10:00:00","slotEnd":"2026-11-02T10:30:00","reason":"食欲不振，需要检查"}'
+
+# 业务接口 3：按宠物查询预约 → 200
+curl -s "http://localhost:8080/api/appointments?petId=1"
+
+# 业务接口 4：查询预约详情 → 200
+curl -s http://localhost:8080/api/appointments/1
+```
+
+也可以直接跑封装好的脚本，一次输出容器状态与全部接口响应：
+
+```bash
+bash scripts/docker-smoke-test.sh
+```
+
+### 5.7 第六步：停止与数据保留
+
+```bash
+# 停止并删除容器与网络，但保留命名数据卷（下次 up 数据还在）
+docker compose down
+
+# 重新启动，数据恢复
+docker compose up -d
+
+# ⚠️ 只有这一条会连数据卷一起删除，数据不可恢复
+docker compose down -v
+```
+
+命名数据卷 `petclinic-mysql-data` 是 MySQL 数据真正落盘的位置：
+
+```bash
+docker volume ls | grep petclinic
+docker volume inspect petclinic-mysql-data
+```
 
 ---
 
 ## 附：仓库说明
+
 
 ### 目录结构
 
 ```
 .
 ├── README.md                     # 项目入口：背景、功能设计、运行说明与演进方向
+├── compose.yaml                  # 第 05 周：app + mysql(8.4.11) 编排，含健康检查与命名卷
+├── .env.example                  # 第 05 周：环境变量模板（复制为 .env 使用）
+├── scripts/
+│   └── docker-smoke-test.sh      # 容器化后的一次性接口验证脚本
 ├── monolith/                     # 第 03 周创建的单体 Spring Boot 工程（可独立运行）
+│   ├── Dockerfile                # 第 05 周：多阶段构建（maven 编译 → jre 运行）
+│   ├── .dockerignore             # 第 05 周：构建上下文忽略规则
 │   ├── pom.xml                   # Spring Boot 4.0.8 + Java 25 + Web/JPA/Validation/Actuator + MySQL/H2
 │   ├── mvnw / mvnw.cmd           # Maven Wrapper
 │   └── src/
@@ -270,7 +412,8 @@ curl -i -X POST http://localhost:8080/api/appointments/1/cancel
 │       │   ├── service/          # 业务层（预约业务规则在此实现）
 │       │   ├── web/              # REST Controller（/api/pets、/api/appointments、/api/doctors）
 │       │   └── exception/        # 全局异常：409 业务规则 / 404 / 400
-│       ├── main/resources/       # application.yml（MySQL）、application-h2.yml、data.sql
+│       ├── main/resources/       # application.yml（MySQL）、application-h2.yml、application-docker.yml
+│       │   └── db/seed-mysql.sql # 容器用的幂等种子数据（容器反复重启不会重复插入）
 │       └── test/                 # Repository / Service / API 三层测试（H2，可重复）
 ├── docs/
 │   ├── project-proposal.md       # 项目提案：业务流程、实体模型、业务规则（按周更新）
@@ -279,7 +422,8 @@ curl -i -X POST http://localhost:8080/api/appointments/1/cancel
 │       ├── week-01/              # 第 1 周：环境检查与概念回答
 │       ├── week-02/              # 第 2 周：项目选题与功能规划
 │       ├── week-03/              # 第 3 周：Spring Boot 工程创建与运行验证
-│       └── week-04/              # 第 4 周：业务建模、分层实现与数据库持久化
+│       ├── week-04/              # 第 4 周：业务建模、分层实现与数据库持久化
+│       └── week-05/              # 第 5 周：Docker 镜像构建、Compose 编排与数据持久化
 └── src/                          # （历史占位目录，后续服务拆分时使用）
 ```
 
