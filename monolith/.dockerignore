@@ -1,0 +1,48 @@
+# =====================================================================
+# Docker 构建上下文忽略规则
+# 只把「构建真正需要的东西」（pom.xml + src）送进 daemon，
+# 上下文越小，构建越快，也能避免把本地密码、IDE 配置打进镜像。
+# =====================================================================
+
+# ---- 本地构建产物：镜像内会重新编译，无需传入 ----
+target/
+**/target/
+*.jar
+*.war
+*.class
+
+# ---- 版本控制与 CI ----
+.git/
+.gitignore
+.github/
+
+# ---- IDE 配置 ----
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.settings/
+.classpath
+.project
+
+# ---- 本地环境变量与密码文件：绝不进镜像 ----
+.env
+*.env
+*.pem
+*.key
+*.p12
+secrets/
+
+# ---- Maven Wrapper：构建阶段用镜像内的 mvn，不需要本地 wrapper ----
+.mvn/
+mvnw
+mvnw.cmd
+
+# ---- 文档、日志等无关内容 ----
+docs/
+*.md
+*.log
+logs/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,50 @@
+# =====================================================================
+# docker profile：容器内运行时的配置
+#
+# 由 compose.yaml 通过 SPRING_PROFILES_ACTIVE=docker 激活。
+# 与本地运行的区别：
+#   1) 数据库地址指向 compose 服务名 mysql，而不是 localhost
+#   2) 等待 Hibernate 建表后再灌种子数据（defer-datasource-initialization）
+#   3) 种子 SQL 做成幂等写法，容器反复重启也不会重复插入医生
+# =====================================================================
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:petclinic}
+    password: ${DB_PASSWORD:petclinic}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 数据库刚 healthy 时可能还有几秒不可用，给连接池留出重试时间
+      connection-timeout: 30000
+      initialization-fail-timeout: 60000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+    # 关键：先让 Hibernate 建表，再执行下面的种子 SQL
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:db/seed-mysql.sql
+      encoding: UTF-8
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info
+    com.zjgsu.njb: info

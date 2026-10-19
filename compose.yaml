@@ -1,0 +1,97 @@
+# =====================================================================
+# 萌宠诊所 · 宠物医院管理系统 —— 一键启动编排
+#
+# 用法：
+#   cp .env.example .env           # 第一次使用，复制配置模板
+#   docker compose up -d --build   # 构建镜像并后台启动 app + mysql
+#   docker compose ps              # 查看状态
+#   docker compose logs -f app     # 跟踪应用日志
+#   docker compose down            # 停止并删除容器（保留数据卷）
+#
+# 说明：不使用已废弃的 version 字段（Compose V2 规范）。
+# =====================================================================
+
+name: petclinic
+
+services:
+
+  # -------------------------------------------------------------------
+  # 数据库：MySQL 8.4.11
+  # 数据目录挂到命名卷 mysql-data，容器删除重建后数据不丢
+  # -------------------------------------------------------------------
+  mysql:
+    image: mysql:8.4.11
+    container_name: petclinic-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      # 宿主机端口可通过 .env 调整，避免和本机已装的 MySQL 冲突
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - petclinic-net
+    healthcheck:
+      # 密码用 $$ 转义，避免被 Compose 先做变量替换，实际由容器内 shell 展开
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # -------------------------------------------------------------------
+  # 应用：由 ./monolith 下的 Dockerfile 构建
+  # 通过服务名 mysql 连接数据库（同一自定义网络内的 DNS 解析）
+  # -------------------------------------------------------------------
+  app:
+    build:
+      context: ./monolith
+      dockerfile: Dockerfile
+    image: petclinic-monolith:week05
+    container_name: petclinic-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        # 等 MySQL 健康检查通过后再启动应用，避免启动即连接失败
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    networks:
+      - petclinic-net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+
+# ---------------------------------------------------------------------
+# 共享网络：app 与 mysql 加入同一 bridge 网络，
+# app 里直接写 jdbc:mysql://mysql:3306/... 即可解析到 mysql 容器
+# ---------------------------------------------------------------------
+networks:
+  petclinic-net:
+    driver: bridge
+
+# ---------------------------------------------------------------------
+# 命名数据卷：MySQL 数据真正落盘的位置。
+# docker compose down 只会删容器，不会删命名卷；
+# 只有 docker compose down -v 才会连卷一起删（本作业的持久化验证不使用 -v）。
+# ---------------------------------------------------------------------
+volumes:
+  mysql-data:
+    name: petclinic-mysql-data
