@@ -1,0 +1,41 @@
+# =====================================================================
+# pet-service 默认配置（本地直连 MySQL 的开发形态）
+#
+# 容器运行时由 docker profile（application-docker.yml）接管，
+# 连接参数均可被环境变量覆盖。
+# =====================================================================
+spring:
+  application:
+    name: pet-service
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/petclinic_pet?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# 容器内监听 8080，宿主机由 compose 映射为 8081
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info

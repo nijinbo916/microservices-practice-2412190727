@@ -1,0 +1,31 @@
+# 本地构建产物（镜像内会重新编译）
+target/
+**/target/
+*.jar
+*.class
+
+# 版本与 CI
+.git/
+.github/
+
+# IDE 配置
+.idea/
+.vscode/
+*.iml
+
+# 密码与密钥（镜像层可被 docker save 导出，绝不能带进去）
+.env
+*.env
+*.pem
+*.key
+secrets/
+
+# 构建使用镜像内的 mvn，不需要 Wrapper
+.mvn/
+mvnw
+mvnw.cmd
+
+# 文档与日志和运行无关
+docs/
+*.md
+*.log

@@ -1,0 +1,31 @@
+# ----------------------------------------------------------------------
+# test profile：单元测试专用配置（H2 内存数据库）
+# pet/doctor 的 base-url 指向占位地址；测试用 MockRestServiceServer
+# 拦截 RestTemplate 请求，不会真正发起网络调用
+# ----------------------------------------------------------------------
+spring:
+  datasource:
+    url: jdbc:h2:mem:appointment-service-test;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    open-in-view: false
+    show-sql: false
+
+  sql:
+    init:
+      mode: never
+
+pet:
+  base-url: http://pet-service-stub
+doctor:
+  base-url: http://doctor-service-stub
+
+logging:
+  level:
+    root: warn

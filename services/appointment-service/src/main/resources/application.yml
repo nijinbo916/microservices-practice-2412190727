@@ -1,0 +1,51 @@
+# =====================================================================
+# appointment-service 默认配置（本地开发形态：三个服务都在本机跑）
+#
+# 跨服务地址（可被环境变量覆盖，容器中由 compose 注入服务名地址）：
+#   PET_SERVICE_URL     默认 http://localhost:8081
+#   DOCTOR_SERVICE_URL  默认 http://localhost:8082
+# =====================================================================
+spring:
+  application:
+    name: appointment-service
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/petclinic_appointment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# 依赖服务地址与超时（超时不可省：依赖服务卡死不能拖死本服务）
+pet:
+  base-url: ${PET_SERVICE_URL:http://localhost:8081}
+doctor:
+  base-url: ${DOCTOR_SERVICE_URL:http://localhost:8082}
+remote:
+  connect-timeout-ms: 3000
+  read-timeout-ms: 5000
+
+# 容器内监听 8080，宿主机由 compose 映射为 8083
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info

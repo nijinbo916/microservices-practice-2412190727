@@ -25,3 +25,6 @@ Thumbs.db
 # ---- 日志 ----
 *.log
 logs/
+
+# 本地 Maven 种子包（加速镜像构建用，不入库）
+services/*/docker/m2-local.tgz

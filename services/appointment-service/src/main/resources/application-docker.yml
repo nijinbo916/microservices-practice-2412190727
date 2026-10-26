@@ -1,0 +1,45 @@
+# =====================================================================
+# appointment-service docker profile：容器内运行
+# 数据库 = 本服务专属的 petclinic_appointment 库（账号 appointment_user）
+# 依赖服务地址改为 compose 服务名（同一自定义网络内的 DNS 解析）
+# =====================================================================
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_appointment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:appointment_user}
+    password: ${DB_PASSWORD:appointment_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 30000
+      initialization-fail-timeout: 60000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+
+pet:
+  base-url: ${PET_SERVICE_URL:http://pet:8080}
+doctor:
+  base-url: ${DOCTOR_SERVICE_URL:http://doctor:8080}
+remote:
+  connect-timeout-ms: 3000
+  read-timeout-ms: 5000
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info
+    com.zjgsu.njb.appointment: info

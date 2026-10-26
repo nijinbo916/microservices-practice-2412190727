@@ -1,14 +1,22 @@
 # =====================================================================
-# 萌宠诊所 · 宠物医院管理系统 —— 一键启动编排
+# 萌宠诊所 · 宠物医院管理系统 —— 微服务一键启动编排（第 06 周）
 #
 # 用法：
 #   cp .env.example .env           # 第一次使用，复制配置模板
-#   docker compose up -d --build   # 构建镜像并后台启动 app + mysql
+#   docker compose up -d --build   # 构建并启动 mysql + 三个微服务
 #   docker compose ps              # 查看状态
-#   docker compose logs -f app     # 跟踪应用日志
+#   docker compose logs -f appointment-service
 #   docker compose down            # 停止并删除容器（保留数据卷）
+#   bash scripts/smoke-test.sh     # 一键验证（从仓库根目录运行）
 #
-# 说明：不使用已废弃的 version 字段（Compose V2 规范）。
+# 说明：
+#   - 不使用已废弃的 version 字段（Compose V2 规范）
+#   - 三个微服务各自独立构建上下文 services/<服务名>/
+#   - 同一个 MySQL 实例内建三个独立数据库 + 三个独立账号（见 docker/mysql-init/），
+#     任何服务都只能读写自己的库，禁止跨服务访问数据表
+#   - 服务间通过 Compose 服务名通信（pet-service / doctor-service），
+#     不使用 localhost 访问其他容器
+#   - 第 05 周的单体工程保留在 monolith/，不再参与本周编排
 # =====================================================================
 
 name: petclinic
@@ -16,27 +24,27 @@ name: petclinic
 services:
 
   # -------------------------------------------------------------------
-  # 数据库：MySQL 8.4.11
-  # 数据目录挂到命名卷 mysql-data，容器删除重建后数据不丢
+  # 数据库：MySQL 8.4.11 单实例，初始化脚本建立三库三账号
   # -------------------------------------------------------------------
   mysql:
     image: mysql:8.4.11
     container_name: petclinic-mysql
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # 初始化脚本（docker/mysql-init/01-init-databases.sh）读取这三个变量建库建账号
+      PET_DB_PASSWORD: ${PET_DB_PASSWORD}
+      DOCTOR_DB_PASSWORD: ${DOCTOR_DB_PASSWORD}
+      APPOINTMENT_DB_PASSWORD: ${APPOINTMENT_DB_PASSWORD}
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     ports:
-      # 宿主机端口可通过 .env 调整，避免和本机已装的 MySQL 冲突
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     networks:
       - petclinic-net
     healthcheck:
@@ -48,28 +56,86 @@ services:
       start_period: 30s
 
   # -------------------------------------------------------------------
-  # 应用：由 ./monolith 下的 Dockerfile 构建
-  # 通过服务名 mysql 连接数据库（同一自定义网络内的 DNS 解析）
+  # pet-service：宠物档案（宿主机 8081）
   # -------------------------------------------------------------------
-  app:
+  pet-service:
     build:
-      context: ./monolith
+      context: ./services/pet-service
       dockerfile: Dockerfile
-    image: petclinic-monolith:week05
-    container_name: petclinic-app
+    image: petclinic-pet-service:week06
+    container_name: petclinic-pet-service
     restart: unless-stopped
     depends_on:
       mysql:
-        # 等 MySQL 健康检查通过后再启动应用，避免启动即连接失败
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      DB_URL: ${DB_URL}
-      DB_USERNAME: ${MYSQL_USER}
-      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_USERNAME: ${PET_DB_USER}
+      DB_PASSWORD: ${PET_DB_PASSWORD}
       TZ: Asia/Shanghai
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${PET_PORT:-8081}:8080"
+    networks:
+      - petclinic-net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+
+  # -------------------------------------------------------------------
+  # doctor-service：医生主数据（宿主机 8082）
+  # -------------------------------------------------------------------
+  doctor-service:
+    build:
+      context: ./services/doctor-service
+      dockerfile: Dockerfile
+    image: petclinic-doctor-service:week06
+    container_name: petclinic-doctor-service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_USERNAME: ${DOCTOR_DB_USER}
+      DB_PASSWORD: ${DOCTOR_DB_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "${DOCTOR_PORT:-8082}:8080"
+    networks:
+      - petclinic-net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+
+  # -------------------------------------------------------------------
+  # appointment-service：预约流程（宿主机 8083）
+  # 通过服务名访问 pet-service / doctor-service（不用 localhost）
+  # -------------------------------------------------------------------
+  appointment-service:
+    build:
+      context: ./services/appointment-service
+      dockerfile: Dockerfile
+    image: petclinic-appointment-service:week06
+    container_name: petclinic-appointment-service
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_USERNAME: ${APPOINTMENT_DB_USER}
+      DB_PASSWORD: ${APPOINTMENT_DB_PASSWORD}
+      PET_SERVICE_URL: http://pet-service:8080
+      DOCTOR_SERVICE_URL: http://doctor-service:8080
+      TZ: Asia/Shanghai
+    ports:
+      - "${APPOINTMENT_PORT:-8083}:8080"
     networks:
       - petclinic-net
     healthcheck:
@@ -80,18 +146,18 @@ services:
       start_period: 40s
 
 # ---------------------------------------------------------------------
-# 共享网络：app 与 mysql 加入同一 bridge 网络，
-# app 里直接写 jdbc:mysql://mysql:3306/... 即可解析到 mysql 容器
+# 共享网络：四个容器加入同一 bridge 网络，
+# 服务名 pet-service / doctor-service / mysql 由 Compose 内建 DNS 解析
 # ---------------------------------------------------------------------
 networks:
   petclinic-net:
     driver: bridge
 
 # ---------------------------------------------------------------------
-# 命名数据卷：MySQL 数据真正落盘的位置。
-# docker compose down 只会删容器，不会删命名卷；
-# 只有 docker compose down -v 才会连卷一起删（本作业的持久化验证不使用 -v）。
+# 命名数据卷：MySQL 数据落盘位置（容器删除重建数据不丢）
+# 注意：这是第 06 周微服务栈的新卷；第 05 周单体的旧卷 petclinic-mysql-data
+#      仍保留在本机（其中是单体 petclinic 库的数据），互不影响
 # ---------------------------------------------------------------------
 volumes:
   mysql-data:
-    name: petclinic-mysql-data
+    name: petclinic-ms-mysql-data

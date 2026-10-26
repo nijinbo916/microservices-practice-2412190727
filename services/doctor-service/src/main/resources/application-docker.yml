@@ -1,0 +1,44 @@
+# =====================================================================
+# doctor-service docker profile：容器内运行
+# 数据库 = 本服务专属的 petclinic_doctor 库（账号 doctor_user）
+# 种子数据用幂等 SQL，容器反复重启医生表始终 3 行
+# =====================================================================
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_doctor?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:doctor_user}
+    password: ${DB_PASSWORD:doctor_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 30000
+      initialization-fail-timeout: 60000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:db/seed-mysql.sql
+      encoding: UTF-8
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info
+    com.zjgsu.njb.doctor: info

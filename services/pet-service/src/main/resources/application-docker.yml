@@ -1,0 +1,36 @@
+# =====================================================================
+# pet-service docker profile：容器内运行
+# 数据库 = 本服务专属的 petclinic_pet 库（账号 pet_user，见 mysql 初始化脚本）
+# =====================================================================
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_pet?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:pet_user}
+    password: ${DB_PASSWORD:pet_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 30000
+      initialization-fail-timeout: 60000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info
+    com.zjgsu.njb.pet: info

@@ -1,0 +1,38 @@
+# =====================================================================
+# doctor-service 默认配置（本地直连 MySQL 的开发形态）
+# =====================================================================
+spring:
+  application:
+    name: doctor-service
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/petclinic_doctor?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# 容器内监听 8080，宿主机由 compose 映射为 8082
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: info

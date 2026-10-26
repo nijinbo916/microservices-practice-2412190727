@@ -385,6 +385,89 @@ docker volume ls | grep petclinic
 docker volume inspect petclinic-mysql-data
 ```
 
+> 第 06 周起仓库进入微服务阶段：上面第五章的编排已由第六章的微服务编排替代
+> （单体代码保留在 `monolith/`，仍可按本章命令独立运行）。
+
+---
+
+## 六、微服务架构（第 06 周）
+
+单体按数据归属拆分为三个独立 Spring Boot 工程（设计详见
+[docs/microservices-design.md](docs/microservices-design.md)）：
+
+| 服务 | 宿主机端口 | 独立数据库 | 职责 |
+| --- | --- | --- | --- |
+| `services/pet-service` | 8084 | `petclinic_pet` | 宠物档案（数据唯一权威来源） |
+| `services/doctor-service` | 8082 | `petclinic_doctor` | 医生主数据与每日号源上限 |
+| `services/appointment-service` | 8083 | `petclinic_appointment` | 预约流程与号源规则（跨服务 HTTP 校验） |
+
+服务间只通过 HTTP 协作：创建预约前，appointment-service 用 RestTemplate 调用
+pet-service / doctor-service 校验宠物与医生（连接超时 3s / 读取超时 5s，地址可由
+环境变量 `PET_SERVICE_URL` / `DOCTOR_SERVICE_URL` 覆盖）；远端 404 → 本地返回 404，
+远端不可达 → 返回 503，两种失败都**不会写入本地数据**。跨服务关联只保存对方 ID
+（逻辑外键），不建跨库外键、不跨库 JOIN、不调对方 Repository。
+
+### 6.1 一键启动（微服务版）
+
+```bash
+cp .env.example .env            # 第一次使用
+docker compose up -d --build    # 启动 mysql + 三个微服务
+docker compose ps               # 四个容器应均为 Up (healthy)
+```
+
+### 6.2 一键验证
+
+```bash
+# 从仓库根目录运行：健康检查、医生主数据、建档、跨服务创建预约、
+# 查询详情、宠物不存在 404；加参数再验证依赖服务停机 503
+bash scripts/smoke-test.sh
+bash scripts/smoke-test.sh --with-dependency-down
+```
+
+### 6.3 快速体验跨服务流程（可复制的 curl 示例）
+
+```bash
+# 1) 健康检查（三个服务同理）
+curl -s http://localhost:8084/actuator/health
+curl -s http://localhost:8082/actuator/health
+curl -s http://localhost:8083/actuator/health
+
+# 2) 在 pet-service 建档（返回 id，记为 <PET_ID>）
+curl -s -X POST http://localhost:8084/api/pets \
+  -H "Content-Type: application/json" \
+  -d '{"name":"豆豆","species":"犬","breed":"金毛","ownerName":"倪先生","ownerPhone":"13800000001","birthday":"2021-05-20","weightKg":28.50,"allergyHistory":"青霉素过敏"}'
+
+# 3) 在 doctor-service 查医生（种子数据 3 名，取 id=1）
+curl -s http://localhost:8082/api/doctors
+
+# 4) 在 appointment-service 创建预约 —— 内部先 HTTP 校验宠物与医生
+curl -s -X POST http://localhost:8083/api/appointments \
+  -H "Content-Type: application/json" \
+  -d '{"petId":1,"doctorId":1,"slotStart":"2026-11-05T10:00:00","slotEnd":"2026-11-05T10:30:00","reason":"食欲不振，需要检查"}'
+
+# 5) 查询预约详情（petName / doctorName 来自对两个服务的实时 HTTP 查询）
+curl -s http://localhost:8083/api/appointments/1
+
+# 6) 失败场景：宠物不存在 → 404，不写库
+curl -s -X POST http://localhost:8083/api/appointments \
+  -H "Content-Type: application/json" \
+  -d '{"petId":999999,"doctorId":1,"slotStart":"2026-11-05T11:00:00","slotEnd":"2026-11-05T11:30:00","reason":"宠物不存在测试"}'
+```
+
+### 6.4 测试命令（每个服务独立运行）
+
+```bash
+cd services/pet-service         && ./mvnw test   # 6 个用例
+cd services/doctor-service      && ./mvnw test   # 5 个用例
+cd services/appointment-service && ./mvnw test   # 11 个用例（含模拟远端 404/500）
+```
+
+### 6.5 停止
+
+```bash
+docker compose down     # 停止并删容器，保留命名数据卷 petclinic-ms-mysql-data
+```
+
 ---
 
 ## 附：仓库说明
@@ -395,11 +478,18 @@ docker volume inspect petclinic-mysql-data
 ```
 .
 ├── README.md                     # 项目入口：背景、功能设计、运行说明与演进方向
-├── compose.yaml                  # 第 05 周：app + mysql(8.4.11) 编排，含健康检查与命名卷
-├── .env.example                  # 第 05 周：环境变量模板（复制为 .env 使用）
+├── compose.yaml                  # 第 06 周：mysql + 三个微服务编排（健康检查、命名卷、服务名互通）
+├── .env.example                  # 环境变量模板（复制为 .env 使用）
+├── docker/
+│   └── mysql-init/               # 第 06 周：MySQL 首次初始化（三库三账号，最小权限）
 ├── scripts/
-│   └── docker-smoke-test.sh      # 容器化后的一次性接口验证脚本
-├── monolith/                     # 第 03 周创建的单体 Spring Boot 工程（可独立运行）
+│   ├── smoke-test.sh             # 第 06 周：微服务冒烟测试（从仓库根目录运行）
+│   └── docker-smoke-test.sh      # 第 05 周：单体容器化接口验证脚本
+├── services/                     # 第 06 周：三个独立 Spring Boot 微服务
+│   ├── pet-service/              # 宠物档案（8084 / petclinic_pet）
+│   ├── doctor-service/           # 医生主数据（8082 / petclinic_doctor）
+│   └── appointment-service/      # 预约流程（8083 / petclinic_appointment，RestTemplate 跨服务校验）
+├── monolith/                     # 第 03 周创建的单体 Spring Boot 工程（原样保留，可独立运行）
 │   ├── Dockerfile                # 第 05 周：多阶段构建（maven 编译 → jre 运行）
 │   ├── .dockerignore             # 第 05 周：构建上下文忽略规则
 │   ├── pom.xml                   # Spring Boot 4.0.8 + Java 25 + Web/JPA/Validation/Actuator + MySQL/H2
@@ -418,13 +508,15 @@ docker volume inspect petclinic-mysql-data
 ├── docs/
 │   ├── project-proposal.md       # 项目提案：业务流程、实体模型、业务规则（按周更新）
 │   ├── database.md               # 数据库设计：表结构、约束、索引与建表 DDL
+│   ├── microservices-design.md   # 第 06 周：服务边界、调用关系与架构图
 │   └── homework/
 │       ├── week-01/              # 第 1 周：环境检查与概念回答
 │       ├── week-02/              # 第 2 周：项目选题与功能规划
 │       ├── week-03/              # 第 3 周：Spring Boot 工程创建与运行验证
 │       ├── week-04/              # 第 4 周：业务建模、分层实现与数据库持久化
-│       └── week-05/              # 第 5 周：Docker 镜像构建、Compose 编排与数据持久化
-└── src/                          # （历史占位目录，后续服务拆分时使用）
+│       ├── week-05/              # 第 5 周：Docker 镜像构建、Compose 编排与数据持久化
+│       └── week-06/              # 第 6 周：微服务拆分、本地编排与验证
+└── src/                          # （历史占位目录）
 ```
 
 ### 开发环境一览（第 1 周检查结果）
