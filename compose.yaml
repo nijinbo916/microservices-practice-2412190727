@@ -62,7 +62,8 @@ services:
     networks:
       - petclinic-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8848/nacos/ >/dev/null || exit 1"]
+      # Nacos 官方镜像不含 curl，这里用 bash 的 /dev/tcp 探测 API 端口是否已监听
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8848' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30

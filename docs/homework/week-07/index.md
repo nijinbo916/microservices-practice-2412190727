@@ -157,7 +157,7 @@ spring:
 | --- | --- |
 | 1. 部署与注册 | 03-register-config（注册配置）、04-compose-nacos（Nacos 服务定义） |
 | 2. 服务发现调用 | 01-discovery-code（实时寻址）、02-pet-client（实例 URI 拼装）、06-flow-create（跨服务 201） |
-| 3. 健康与失败 | 05-health（三服务 UP）、07-fail-404（404 不写库） |
+| 3. 健康与失败 | 05-health（三服务 UP）、07-fail-404（404 不写库）、10-service-down（停掉 pet-service 后容器消失、Nacos 中 `ipCount:0`）、11-empty-instance-test（实例列表为空 → 503 且不写库） |
 | 4. 脚本与测试 | 08-smoke-all（PASS=13 FAIL=0）、09-tests（三服务 24 用例） |
 
 ## 六、遇到的问题与解决
