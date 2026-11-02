@@ -28,3 +28,10 @@ logs/
 
 # 本地 Maven 种子包（加速镜像构建用，不入库）
 services/*/docker/m2-local.tgz
+
+# 本机离线构建覆盖（jar 已在宿主机打好，仅本地验证用，不入库）
+compose.override.yaml
+services/*/Dockerfile.local
+services/*/Dockerfile.local.dockerignore
+services/*/docker/app.jar.bin
+services/*/docker/app.jar.bin
