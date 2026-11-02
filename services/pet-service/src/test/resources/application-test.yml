@@ -5,6 +5,13 @@
 # - ddl-auto=create-drop：每次测试运行重建表结构
 # ----------------------------------------------------------------------
 spring:
+  # 单元测试不依赖真实 Nacos：关闭注册与发现，由测试用假 DiscoveryClient 代替
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+        register-enabled: false
+
   datasource:
     url: jdbc:h2:mem:pet-service-test;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
     username: sa

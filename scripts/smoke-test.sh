@@ -1,14 +1,14 @@
 #!/bin/bash
 # =====================================================================
-# 萌宠诊所 · 微服务冒烟测试（第 06 周）
+# 萌宠诊所 · 微服务冒烟测试（第 07 周 · 接入 Nacos）
 #
 # 用法（从仓库根目录运行）：
 #   bash scripts/smoke-test.sh
 #
 # 可选参数：
-#   --with-dependency-down   额外执行「依赖服务不可用」场景：
-#                            停掉 pet-service 后创建预约，应得到 503
-#                            且本地不产生任何预约数据，随后自动重启 pet-service
+#   --with-dependency-down   额外执行「依赖服务下线/恢复」场景：
+#                            停掉 pet-service → 等 Nacos 摘除实例 → 创建预约应得 503
+#                            且本地不产生任何预约数据 → 重启 pet-service → 再次创建应成功
 #
 # 端口从 .env 读取（缺省 8084 / 8082 / 8083）。
 # =====================================================================
@@ -17,19 +17,22 @@ set -u
 cd "$(dirname "$0")/.."
 
 # ---- 读取 .env 中的端口 ----
-PET_PORT=8084; DOCTOR_PORT=8082; APPOINTMENT_PORT=8083
+PET_PORT=8084; DOCTOR_PORT=8082; APPOINTMENT_PORT=8083; NACOS_CONSOLE_PORT=18080
 if [ -f .env ]; then
   PET_PORT=$(grep -E '^PET_PORT=' .env | cut -d= -f2)
   DOCTOR_PORT=$(grep -E '^DOCTOR_PORT=' .env | cut -d= -f2)
   APPOINTMENT_PORT=$(grep -E '^APPOINTMENT_PORT=' .env | cut -d= -f2)
+  NACOS_CONSOLE_PORT=$(grep -E '^NACOS_CONSOLE_PORT=' .env | cut -d= -f2)
 fi
 PET_PORT=${PET_PORT:-8084}
 DOCTOR_PORT=${DOCTOR_PORT:-8082}
 APPOINTMENT_PORT=${APPOINTMENT_PORT:-8083}
+NACOS_CONSOLE_PORT=${NACOS_CONSOLE_PORT:-18080}
 
 PET="http://localhost:${PET_PORT}"
 DOCTOR="http://localhost:${DOCTOR_PORT}"
 APPT="http://localhost:${APPOINTMENT_PORT}"
+NACOS="http://localhost:${NACOS_CONSOLE_PORT}"
 
 PASS=0; FAIL=0
 
@@ -44,6 +47,17 @@ extract_id() { # 从 JSON 里取第一个 "id":N
   printf '%s' "$1" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2
 }
 
+echo "=============================================="
+echo " 0) Nacos 控制台可访问（${NACOS}，新版控制台不在 8848/nacos）"
+echo "=============================================="
+nacos_code=$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$NACOS/" || true)
+if [ "$nacos_code" = "200" ] || [ "$nacos_code" = "302" ] || [ "$nacos_code" = "307" ]; then
+  ok "Nacos 控制台 HTTP 可访问（$nacos_code）"
+else
+  bad "Nacos 控制台不可访问：$NACOS（HTTP $nacos_code）"
+fi
+
+echo ""
 echo "=============================================="
 echo " 1) 健康检查：三个服务的 /actuator/health"
 echo "=============================================="
@@ -119,13 +133,35 @@ if [ "${1:-}" = "--with-dependency-down" ]; then
   echo " 7) 失败场景 B：pet-service 停机（应 503，不写库）"
   echo "=============================================="
   docker compose stop pet-service >/dev/null 2>&1
-  sleep 3
+  echo "  已停止 pet-service，等待 Nacos 摘除实例（约 20s）..."
+  sleep 20
   down_resp=$(curl -s -m 15 -X POST "$APPT/api/appointments" \
     -H "Content-Type: application/json" \
     -d "{\"petId\":$PET_ID,\"doctorId\":1,\"slotStart\":\"$FUTURE_START\",\"slotEnd\":\"$FUTURE_END\",\"reason\":\"依赖停机测试\"}" || true)
   check_contains "pet-service 停机时创建预约返回 503" "$down_resp" '"status":503'
   docker compose start pet-service >/dev/null 2>&1
-  echo "  （pet-service 已重新启动）"
+  echo "  正在重启 pet-service，等待重新注册并可访问..."
+  for i in $(seq 1 24); do
+    if curl -s -m 3 "http://localhost:${PET_PORT}/actuator/health" | grep -q 'UP'; then
+      echo "  pet-service 恢复（约 ${i}0s）"
+      break
+    fi
+    sleep 10
+  done
+  # 恢复后用新的有效参数再创建一次，应重新成功（证明不是永久性错误）
+  RECOVER_PET=$(curl -s -m 10 -X POST "http://localhost:${PET_PORT}/api/pets" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"恢复验证宠物$(date +%H%M%S)\",\"species\":\"猫\",\"breed\":\"英短\",\"ownerName\":\"倪先生\",\"ownerPhone\":\"13800000001\",\"weightKg\":4.20}" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+  RECOVER_START=$(date -d "+5 day" +%Y-%m-%dT11:00:00 2>/dev/null || date -v+5d +%Y-%m-%dT11:00:00)
+  RECOVER_END=$(date -d "+5 day" +%Y-%m-%dT11:30:00 2>/dev/null || date -v+5d +%Y-%m-%dT11:30:00)
+  rec_resp=$(curl -s -m 15 -X POST "$APPT/api/appointments" \
+    -H "Content-Type: application/json" \
+    -d "{\"petId\":${RECOVER_PET:-0},\"doctorId\":1,\"slotStart\":\"$RECOVER_START\",\"slotEnd\":\"$RECOVER_END\",\"reason\":\"恢复后验证\"}" || true)
+  if printf '%s' "$rec_resp" | grep -q '"id"'; then
+    ok "服务恢复后重新发现实例并创建预约成功"
+  else
+    bad "服务恢复后创建预约仍失败：$rec_resp"
+  fi
   echo ""
 fi
 

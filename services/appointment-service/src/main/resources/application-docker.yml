@@ -1,9 +1,21 @@
 # =====================================================================
 # appointment-service docker profile：容器内运行
 # 数据库 = 本服务专属的 petclinic_appointment 库（账号 appointment_user）
-# 依赖服务地址改为 compose 服务名（同一自定义网络内的 DNS 解析）
+# 依赖服务地址不再固定：通过 Nacos 服务名发现实例（不再使用 compose DNS 固定地址）
 # =====================================================================
 spring:
+  # ---- Nacos 服务注册与发现（第 07 周）----
+  # 地址与凭据全部来自环境变量；分组 PERSONAL_GROUP 为个人项目专用，不与课堂示例混用
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: ${NACOS_GROUP:PERSONAL_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: ${NACOS_REGISTER_ENABLED:true}
+
   datasource:
     url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_appointment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:appointment_user}
@@ -20,9 +32,9 @@ spring:
     show-sql: false
 
 pet:
-  base-url: ${PET_SERVICE_URL:http://pet:8080}
+  service-name: ${PET_SERVICE_NAME:pet-service}
 doctor:
-  base-url: ${DOCTOR_SERVICE_URL:http://doctor:8080}
+  service-name: ${DOCTOR_SERVICE_NAME:doctor-service}
 remote:
   connect-timeout-ms: 3000
   read-timeout-ms: 5000

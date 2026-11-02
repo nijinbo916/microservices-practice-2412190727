@@ -1,5 +1,5 @@
 # =====================================================================
-# 萌宠诊所 · 宠物医院管理系统 —— 微服务一键启动编排（第 06 周）
+# 萌宠诊所 · 宠物医院管理系统 —— 微服务一键启动编排（第 07 周 · 接入 Nacos）
 #
 # 用法：
 #   cp .env.example .env           # 第一次使用，复制配置模板
@@ -8,6 +8,11 @@
 #   docker compose logs -f appointment-service
 #   docker compose down            # 停止并删除容器（保留数据卷）
 #   bash scripts/smoke-test.sh     # 一键验证（从仓库根目录运行）
+#
+# 第 07 周新增：
+#   - Nacos 单机模式（含鉴权与数据卷），控制台 18080、服务端 8848、SDK 9848
+#   - 业务服务通过服务名注册到 Nacos（分组 PERSONAL_GROUP），跨服务调用改为服务发现
+#   - 首次启动后需初始化 Nacos 管理员密码，命令见 README「七、接入 Nacos」
 #
 # 说明：
 #   - 不使用已废弃的 version 字段（Compose V2 规范）
@@ -22,6 +27,46 @@
 name: petclinic
 
 services:
+
+  # -------------------------------------------------------------------
+  # Nacos 3.2.4：服务注册与发现中心（单机模式 + 鉴权 + 数据卷）
+  #   - 控制台 容器 8080 → 宿主机 ${NACOS_CONSOLE_PORT:-18080}
+  #   - 服务端 HTTP 8848（SDK 与 HTTP API 注册/发现都走这里）
+  #   - SDK gRPC 9848（客户端长连接端口，缺了会注册失败）
+  #   - 鉴权三要素（Token / identity key / identity value）全部来自 .env
+  # -------------------------------------------------------------------
+  nacos:
+    image: nacos/nacos-server:v3.2.4
+    container_name: petclinic-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_ADMIN_ENABLE: "true"
+      NACOS_AUTH_CONSOLE_ENABLE: "true"
+      NACOS_AUTH_SYSTEM_TYPE: nacos
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      TZ: Asia/Shanghai
+    ports:
+      - "${NACOS_CONSOLE_PORT:-18080}:8080"   # 控制台（浏览器访问）
+      - "${NACOS_SERVER_PORT:-8848}:8848"     # 服务端 HTTP（注册/发现/OpenAPI）
+      - "${NACOS_SDK_PORT:-9848}:9848"        # SDK gRPC 长连接（客户端注册必需）
+    volumes:
+      - nacos-data:/home/nacos/data
+      - nacos-logs:/home/nacos/logs
+    networks:
+      - petclinic-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8848/nacos/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
   # -------------------------------------------------------------------
   # 数据库：MySQL 8.4.11 单实例，初始化脚本建立三库三账号
@@ -62,16 +107,24 @@ services:
     build:
       context: ./services/pet-service
       dockerfile: Dockerfile
-    image: petclinic-pet-service:week06
+    image: petclinic-pet-service:week07
     container_name: petclinic-pet-service
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
+      nacos:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
       DB_USERNAME: ${PET_DB_USER}
       DB_PASSWORD: ${PET_DB_PASSWORD}
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME}
+      NACOS_PASSWORD: ${NACOS_PASSWORD}
+      NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
+      NACOS_REGISTER_ENABLED: "true"
       TZ: Asia/Shanghai
     ports:
       - "${PET_PORT:-8081}:8080"
@@ -91,16 +144,24 @@ services:
     build:
       context: ./services/doctor-service
       dockerfile: Dockerfile
-    image: petclinic-doctor-service:week06
+    image: petclinic-doctor-service:week07
     container_name: petclinic-doctor-service
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
+      nacos:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
       DB_USERNAME: ${DOCTOR_DB_USER}
       DB_PASSWORD: ${DOCTOR_DB_PASSWORD}
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME}
+      NACOS_PASSWORD: ${NACOS_PASSWORD}
+      NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
+      NACOS_REGISTER_ENABLED: "true"
       TZ: Asia/Shanghai
     ports:
       - "${DOCTOR_PORT:-8082}:8080"
@@ -121,18 +182,26 @@ services:
     build:
       context: ./services/appointment-service
       dockerfile: Dockerfile
-    image: petclinic-appointment-service:week06
+    image: petclinic-appointment-service:week07
     container_name: petclinic-appointment-service
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
+      nacos:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
       DB_USERNAME: ${APPOINTMENT_DB_USER}
       DB_PASSWORD: ${APPOINTMENT_DB_PASSWORD}
-      PET_SERVICE_URL: http://pet-service:8080
-      DOCTOR_SERVICE_URL: http://doctor-service:8080
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME}
+      NACOS_PASSWORD: ${NACOS_PASSWORD}
+      NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
+      NACOS_REGISTER_ENABLED: "true"
+      # 注意：已删除 PET_SERVICE_URL / DOCTOR_SERVICE_URL，
+      # 跨服务地址改由 Nacos 服务名 + 实例发现决定，不再使用 compose 固定 DNS
       TZ: Asia/Shanghai
     ports:
       - "${APPOINTMENT_PORT:-8083}:8080"
@@ -161,3 +230,8 @@ networks:
 volumes:
   mysql-data:
     name: petclinic-ms-mysql-data
+  # Nacos 单机模式的数据（Derby + 注册信息）与日志，容器重建后注册配置不丢
+  nacos-data:
+    name: petclinic-nacos-data
+  nacos-logs:
+    name: petclinic-nacos-logs

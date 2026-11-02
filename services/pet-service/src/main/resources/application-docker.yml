@@ -3,6 +3,18 @@
 # 数据库 = 本服务专属的 petclinic_pet 库（账号 pet_user，见 mysql 初始化脚本）
 # =====================================================================
 spring:
+  # ---- Nacos 服务注册与发现（第 07 周）----
+  # 地址与凭据全部来自环境变量；分组 PERSONAL_GROUP 为个人项目专用，不与课堂示例混用
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: ${NACOS_GROUP:PERSONAL_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: ${NACOS_REGISTER_ENABLED:true}
+
   datasource:
     url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_pet?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:pet_user}

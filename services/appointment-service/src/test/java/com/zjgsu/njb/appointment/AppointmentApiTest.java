@@ -29,6 +29,20 @@ import org.springframework.web.client.RestTemplate;
 @ActiveProfiles("test")
 class AppointmentApiTest {
 
+
+    /** 模拟 DiscoveryClient：把服务名解析到 *-stub:8080，不连接真实 Nacos。 */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private org.springframework.cloud.client.discovery.DiscoveryClient discoveryClient;
+
+    private void stubDiscovery() {
+        org.mockito.Mockito.when(discoveryClient.getInstances("pet-service"))
+                .thenReturn(java.util.List.of(new org.springframework.cloud.client.DefaultServiceInstance(
+                        "pet-1", "pet-service", "pet-service-stub", 8080, false)));
+        org.mockito.Mockito.when(discoveryClient.getInstances("doctor-service"))
+                .thenReturn(java.util.List.of(new org.springframework.cloud.client.DefaultServiceInstance(
+                        "doctor-1", "doctor-service", "doctor-service-stub", 8080, false)));
+    }
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -40,6 +54,7 @@ class AppointmentApiTest {
     @BeforeEach
     void setUp() {
         remote = MockRestServiceServer.bindTo(restTemplate).build();
+        stubDiscovery();
     }
 
     private static final String BODY = """
@@ -50,11 +65,11 @@ class AppointmentApiTest {
 
     @Test
     void createAppointmentReturns201() throws Exception {
-        remote.expect(requestTo("http://pet-service-stub/api/pets/1"))
+        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/1"))
                 .andRespond(withSuccess(
                         "{\"id\":1,\"name\":\"豆豆\",\"species\":\"犬\",\"ownerName\":\"倪先生\"}",
                         MediaType.APPLICATION_JSON));
-        remote.expect(requestTo("http://doctor-service-stub/api/doctors/1"))
+        remote.expect(requestTo("http://doctor-service-stub:8080/api/doctors/1"))
                 .andRespond(withSuccess(
                         "{\"id\":1,\"name\":\"李医生\",\"specialty\":\"内科\",\"dailyCapacity\":4}",
                         MediaType.APPLICATION_JSON));
@@ -73,7 +88,7 @@ class AppointmentApiTest {
 
     @Test
     void missingPetReturns404() throws Exception {
-        remote.expect(requestTo("http://pet-service-stub/api/pets/999"))
+        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/999"))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
         mockMvc.perform(post("/api/appointments")
@@ -88,7 +103,7 @@ class AppointmentApiTest {
 
     @Test
     void dependencyDownReturns503() throws Exception {
-        remote.expect(requestTo("http://pet-service-stub/api/pets/1"))
+        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/1"))
                 .andRespond(withServerError());
 
         mockMvc.perform(post("/api/appointments")

@@ -1,13 +1,25 @@
 # =====================================================================
 # appointment-service 默认配置（本地开发形态：三个服务都在本机跑）
 #
-# 跨服务地址（可被环境变量覆盖，容器中由 compose 注入服务名地址）：
-#   PET_SERVICE_URL     默认 http://localhost:8081
-#   DOCTOR_SERVICE_URL  默认 http://localhost:8082
+# 跨服务地址：不再写死，改为「服务名 + Nacos 服务发现」
+#   pet.service-name / doctor.service-name 由 DiscoveryClient 实时解析实例地址
+#   Nacos 地址/凭据/分组见下方 spring.cloud.nacos.discovery（全部可用环境变量覆盖）
 # =====================================================================
 spring:
   application:
     name: appointment-service
+
+  # ---- Nacos 服务注册与发现（第 07 周）----
+  # 地址与凭据全部来自环境变量；分组 PERSONAL_GROUP 为个人项目专用，不与课堂示例混用
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: ${NACOS_GROUP:PERSONAL_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: ${NACOS_REGISTER_ENABLED:true}
 
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/petclinic_appointment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
@@ -24,11 +36,11 @@ spring:
       hibernate:
         format_sql: true
 
-# 依赖服务地址与超时（超时不可省：依赖服务卡死不能拖死本服务）
+# 依赖服务名（Nacos 中注册的名字）+ 超时（超时不可省：依赖服务卡死不能拖死本服务）
 pet:
-  base-url: ${PET_SERVICE_URL:http://localhost:8081}
+  service-name: ${PET_SERVICE_NAME:pet-service}
 doctor:
-  base-url: ${DOCTOR_SERVICE_URL:http://localhost:8082}
+  service-name: ${DOCTOR_SERVICE_NAME:doctor-service}
 remote:
   connect-timeout-ms: 3000
   read-timeout-ms: 5000

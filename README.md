@@ -402,8 +402,8 @@ docker volume inspect petclinic-mysql-data
 | `services/appointment-service` | 8083 | `petclinic_appointment` | 预约流程与号源规则（跨服务 HTTP 校验） |
 
 服务间只通过 HTTP 协作：创建预约前，appointment-service 用 RestTemplate 调用
-pet-service / doctor-service 校验宠物与医生（连接超时 3s / 读取超时 5s，地址可由
-环境变量 `PET_SERVICE_URL` / `DOCTOR_SERVICE_URL` 覆盖）；远端 404 → 本地返回 404，
+pet-service / doctor-service 校验宠物与医生（连接超时 3s / 读取超时 5s）。**第 07 周起地址不再写死**，
+改为「服务名 + Nacos 服务发现」实时解析实例地址（见第七章）；远端 404 → 本地返回 404，
 远端不可达 → 返回 503，两种失败都**不会写入本地数据**。跨服务关联只保存对方 ID
 （逻辑外键），不建跨库外键、不跨库 JOIN、不调对方 Repository。
 
@@ -459,13 +459,104 @@ curl -s -X POST http://localhost:8083/api/appointments \
 ```bash
 cd services/pet-service         && ./mvnw test   # 6 个用例
 cd services/doctor-service      && ./mvnw test   # 5 个用例
-cd services/appointment-service && ./mvnw test   # 11 个用例（含模拟远端 404/500）
+cd services/appointment-service && ./mvnw test   # 13 个用例（含模拟远端 404/500、实例列表为空）
 ```
 
 ### 6.5 停止
 
 ```bash
 docker compose down     # 停止并删容器，保留命名数据卷 petclinic-ms-mysql-data
+```
+
+---
+
+## 七、接入 Nacos 服务发现（第 07 周）
+
+第 06 周的固定地址调用改为「服务名 + 注册中心」：三个服务注册到 Nacos（分组 `PERSONAL_GROUP`），
+appointment-service 每次创建预约前用 `DiscoveryClient.getInstances("pet-service")` 取**当前**实例地址，
+再用「实例 URI + 原业务路径」发 HTTP 请求。
+
+| 组件 | 宿主机端口 | 说明 |
+| --- | --- | --- |
+| Nacos 控制台 | `18080`（容器 8080） | 浏览器打开 `http://localhost:18080` |
+| Nacos 服务端 HTTP | `8848` | 注册/发现 API、SDK 通信 |
+| Nacos SDK gRPC | `9848` | 客户端长连接端口，缺了会注册失败 |
+
+### 7.1 启动顺序（Nacos 先起，再起业务服务）
+
+```bash
+# 1) 准备环境变量（真实 Token / 密码只写在本地 .env，已 gitignore）
+cp .env.example .env
+#    编辑 .env：填 NACOS_AUTH_TOKEN（Base64，解码后 >= 32 字节）、NACOS_PASSWORD 等
+
+# 2) 先单独启动 Nacos，等它 healthy（首次约 30-60s）
+docker compose up -d nacos
+docker compose ps nacos
+
+# 3) 初始化管理员密码（只需第一次；写入 nacos-data 卷后持久化）
+#    Nacos 3 不再带默认密码，不初始化则控制台无法登录、服务注册也会被拒绝
+curl -X POST 'http://localhost:8848/nacos/v3/auth/user/admin' \
+  -d "password=${NACOS_PASSWORD}"
+
+# 4) 再启动数据库与三个业务服务（会等到 Nacos healthy 后再起）
+docker compose up -d --build
+docker compose ps          # petclinic-nacos + mysql + 三个服务均为 healthy
+```
+
+控制台地址：<http://localhost:18080> ，登录后「服务管理 → 服务列表」，
+命名空间 `public`、分组 `PERSONAL_GROUP`，应看到 `pet-service`、`doctor-service`、
+`appointment-service` 三个服务及各自实例 IP:8080。
+
+### 7.2 服务注册与发现的环境变量
+
+| 变量 | 作用 | compose 中的值 |
+| --- | --- | --- |
+| `NACOS_SERVER_ADDR` | 注册中心地址 | `nacos:8848`（服务名，不用 localhost） |
+| `NACOS_USERNAME` / `NACOS_PASSWORD` | 鉴权凭据 | 来自 `.env` |
+| `NACOS_GROUP` | 个人项目分组 | `PERSONAL_GROUP` |
+| `NACOS_NAMESPACE` | 命名空间（默认 public，留空） | 空 |
+| `NACOS_REGISTER_ENABLED` | 是否注册自身 | `true` |
+
+服务名与 [docs/microservices-design.md](docs/microservices-design.md) 保持一致：
+`pet-service` / `doctor-service` / `appointment-service`（同一服务多实例同名，不同服务不同名）。
+依赖由课程统一 BOM 管理（`spring-cloud-dependencies` + `spring-cloud-alibaba-dependencies`），
+服务自身不覆盖 Nacos Client 版本；本周不引入 Config Starter。
+
+### 7.3 服务发现调用与失败语义
+
+- `ServiceLookup.resolve(服务名)` → `DiscoveryClient.getInstances()` → 取实例 `getUri()`，
+  **每次调用都重新查询**，不在启动时缓存地址；
+- 实例列表为空 → `DependencyUnavailableException` → 接口返回 **503**，不写本地数据；
+- 仍可连上但返回 404 → 保留业务 **404**；连接失败/超时 → 503；
+- 已删除 `pet.base-url` / `doctor.base-url` 及 `PET_SERVICE_URL` / `DOCTOR_SERVICE_URL`，
+  只保留注册中心地址与数据库配置。
+
+### 7.4 验证（健康、下线、恢复）
+
+```bash
+# 从仓库根目录：Nacos 控制台可达 + 三服务健康 + 建档/预约/查询 + 404
+bash scripts/smoke-test.sh
+
+# 追加：停 pet-service → 等 Nacos 摘除实例 → 预约应 503 且不写库 → 重启 → 恢复后再成功
+bash scripts/smoke-test.sh --with-dependency-down
+```
+
+### 7.5 测试命令（不依赖真实 Nacos 与 MySQL）
+
+```bash
+cd services/pet-service         && ./mvnw test   # 6 个用例
+cd services/doctor-service      && ./mvnw test   # 5 个用例
+cd services/appointment-service && ./mvnw test   # 13 个用例（含实例列表为空的 503 测试）
+```
+
+测试 profile 关闭 Nacos 自动注册（`spring.cloud.nacos.discovery.enabled=false`），
+用 `@MockitoBean DiscoveryClient` 模拟服务发现、`MockRestServiceServer` 模拟远端响应，
+数据源为 H2 内存库，因此任何机器上不装 Nacos/MySQL 也能跑通。
+
+### 7.6 停止
+
+```bash
+docker compose down     # 保留数据卷：petclinic-ms-mysql-data / petclinic-nacos-data
 ```
 
 ---

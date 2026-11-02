@@ -35,6 +35,20 @@ import org.springframework.web.client.RestTemplate;
 @ActiveProfiles("test")
 class AppointmentServiceTest {
 
+
+    /** 模拟 DiscoveryClient：把服务名解析到 *-stub:8080，不连接真实 Nacos。 */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private org.springframework.cloud.client.discovery.DiscoveryClient discoveryClient;
+
+    private void stubDiscovery() {
+        org.mockito.Mockito.when(discoveryClient.getInstances("pet-service"))
+                .thenReturn(java.util.List.of(new org.springframework.cloud.client.DefaultServiceInstance(
+                        "pet-1", "pet-service", "pet-service-stub", 8080, false)));
+        org.mockito.Mockito.when(discoveryClient.getInstances("doctor-service"))
+                .thenReturn(java.util.List.of(new org.springframework.cloud.client.DefaultServiceInstance(
+                        "doctor-1", "doctor-service", "doctor-service-stub", 8080, false)));
+    }
+
     @Autowired
     private AppointmentService appointmentService;
 
@@ -55,17 +69,18 @@ class AppointmentServiceTest {
     void setUp() {
         remote = MockRestServiceServer.bindTo(restTemplate).build();
         appointmentRepository.deleteAll();
+        stubDiscovery();
     }
 
     private void stubPetOk(long petId) {
-        remote.expect(requestTo("http://pet-service-stub/api/pets/" + petId))
+        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/" + petId))
                 .andRespond(withSuccess(
                         "{\"id\":" + petId + ",\"name\":\"豆豆\",\"species\":\"犬\",\"ownerName\":\"倪先生\"}",
                         MediaType.APPLICATION_JSON));
     }
 
     private void stubDoctorOk(long doctorId) {
-        remote.expect(requestTo("http://doctor-service-stub/api/doctors/" + doctorId))
+        remote.expect(requestTo("http://doctor-service-stub:8080/api/doctors/" + doctorId))
                 .andRespond(withSuccess(
                         "{\"id\":" + doctorId + ",\"name\":\"李医生\",\"specialty\":\"内科\",\"dailyCapacity\":4}",
                         MediaType.APPLICATION_JSON));
@@ -100,7 +115,7 @@ class AppointmentServiceTest {
 
     @Test
     void missingPetBlocksLocalWrite() {
-        remote.expect(requestTo("http://pet-service-stub/api/pets/999"))
+        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/999"))
                 .andRespond(withStatus(org.springframework.http.HttpStatus.NOT_FOUND));
 
         assertThatThrownBy(() -> appointmentService.createAppointment(request(999, 1)))
@@ -114,7 +129,7 @@ class AppointmentServiceTest {
     @Test
     void dependencyDownBlocksLocalWrite() {
         // pet-service 返回 500（等价于服务不可用/异常）
-        remote.expect(requestTo("http://pet-service-stub/api/pets/1"))
+        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/1"))
                 .andRespond(withServerError());
 
         assertThatThrownBy(() -> appointmentService.createAppointment(request(1, 1)))

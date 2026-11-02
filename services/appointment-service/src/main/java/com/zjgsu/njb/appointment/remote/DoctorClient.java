@@ -2,6 +2,7 @@ package com.zjgsu.njb.appointment.remote;
 
 import com.zjgsu.njb.appointment.exception.DependencyUnavailableException;
 import com.zjgsu.njb.appointment.exception.ResourceNotFoundException;
+import java.net.URI;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -10,26 +11,31 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * doctor-service 的 HTTP 客户端（RestTemplate）。
+ * doctor-service 的 HTTP 客户端（RestTemplate + Nacos 服务发现）。
  *
- * <p>除校验医生存在外，还取回 {@code dailyCapacity} 供「每日号源上限」规则使用。
+ * <p>地址同样由 {@link ServiceLookup} 按服务名实时解析；
+ * 除校验医生存在外，还取回 {@code dailyCapacity} 供「每日号源上限」规则使用。
  * 失败语义与 {@link PetClient} 一致：强依赖失败一律阻止预约写入。</p>
  */
 @Component
 public class DoctorClient {
 
     private final RestTemplate restTemplate;
-    private final String baseUrl;
+    private final ServiceLookup serviceLookup;
+    private final String serviceName;
 
     public DoctorClient(RestTemplate restTemplate,
-                        @Value("${doctor.base-url:http://localhost:8082}") String baseUrl) {
+                        ServiceLookup serviceLookup,
+                        @Value("${doctor.service-name:doctor-service}") String serviceName) {
         this.restTemplate = restTemplate;
-        this.baseUrl = baseUrl;
+        this.serviceLookup = serviceLookup;
+        this.serviceName = serviceName;
     }
 
     /** 校验医生存在并返回视图（强依赖）。 */
     public DoctorView requireDoctor(Long id) {
-        String url = baseUrl + "/api/doctors/" + id;
+        URI base = serviceLookup.resolve(serviceName);
+        String url = base + "/api/doctors/" + id;
         try {
             ResponseEntity<DoctorView> resp = restTemplate.getForEntity(url, DoctorView.class);
             if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {

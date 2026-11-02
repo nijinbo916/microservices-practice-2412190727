@@ -1,9 +1,16 @@
 # ----------------------------------------------------------------------
 # test profile：单元测试专用配置（H2 内存数据库）
-# pet/doctor 的 base-url 指向占位地址；测试用 MockRestServiceServer
-# 拦截 RestTemplate 请求，不会真正发起网络调用
+# 跨服务按服务名寻址，测试用假 DiscoveryClient 解析到 *-stub:8080，
+# 再由 MockRestServiceServer 拦截 RestTemplate 请求，不会发起真实网络调用
 # ----------------------------------------------------------------------
 spring:
+  # 单元测试不依赖真实 Nacos：关闭注册与发现，由测试用假 DiscoveryClient 代替
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+        register-enabled: false
+
   datasource:
     url: jdbc:h2:mem:appointment-service-test;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
     username: sa
@@ -22,9 +29,9 @@ spring:
       mode: never
 
 pet:
-  base-url: http://pet-service-stub
+  service-name: pet-service
 doctor:
-  base-url: http://doctor-service-stub
+  service-name: doctor-service
 
 logging:
   level:
