@@ -17,7 +17,12 @@ PET="http://localhost:${PET_PORT:-8084}"
 DOCTOR="http://localhost:${DOCTOR_PORT:-8082}"
 APPT="http://localhost:${APPOINTMENT_PORT:-8083}"
 
-B=$'\033[1m'; DIM=$'\033[2m'; G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; N=$'\033[0m'
+# 颜色：Windows 的 cmd 窗口不认识 ANSI，设置 NO_COLOR=1 可关闭（bat 启动器会自动设）
+if [ -n "${NO_COLOR:-}" ]; then
+  B=""; DIM=""; G=""; R=""; Y=""; N=""
+else
+  B=$'\033[1m'; DIM=$'\033[2m'; G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; N=$'\033[0m'
+fi
 
 say() { printf '\n%s▌ %s%s\n' "$B" "$1" "$N"; }
 sub() { printf '%s   %s%s\n' "$DIM" "$1" "$N"; }
@@ -73,26 +78,42 @@ PID=$(printf '%s' "$pet" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
 sub "pet-service 建档 → id=$PID  名称=$PET_NAME"
 
 D=$((3 + RANDOM % 5)); H=$((8 + RANDOM % 9)); M=$(( (RANDOM % 6) * 10 ))
-S=$(printf '%s' "$(date -d "+${D} day" +%Y-%m-%d)T$(printf %02d $H):$(printf %02d $M):00")
-E=$(printf '%s' "$(date -d "+${D} day" +%Y-%m-%d)T$(printf %02d $H):$(printf %02d $((M + 30))):00")
-appt=$(curl -s -m 15 -X POST "$APPT/api/appointments" -H "Content-Type: application/json" \
-  -d "{\"petId\":$PID,\"doctorId\":1,\"slotStart\":\"$S\",\"slotEnd\":\"$E\",\"reason\":\"期中汇报演示\"}")
+# 结束时间必须用 date 加 30 分钟，直接 M+30 会算出 15:70 这种非法值
+field() { printf '%s' "$appt" | grep -o "\"$1\":\"\?[^,\"}]*" | head -1 | sed 's/^[^:]*://; s/^"//'; }
+
+# 同一医生同一时段唯一，撞上历史数据会 409；最多换 3 个时段重试，现场不会因此卡住
+appt=""; AID=""
+for attempt in 1 2 3; do
+  [ "$attempt" -gt 1 ] && { D=$((3 + RANDOM % 5)); H=$((8 + RANDOM % 9)); M=$(( (RANDOM % 6) * 10 )); }
+  D_DATE=$(date -d "+${D} day" +%Y-%m-%d)
+  S="${D_DATE}T$(printf %02d $H):$(printf %02d $M):00"
+  S_EPOCH=$(date -d "${D_DATE} $(printf %02d $H):$(printf %02d $M):00" +%s)
+  E=$(date -d "@$((S_EPOCH + 1800))" +%Y-%m-%dT%H:%M:00)
+  appt=$(curl -s -m 15 -X POST "$APPT/api/appointments" -H "Content-Type: application/json" \
+    -d "{\"petId\":$PID,\"doctorId\":1,\"slotStart\":\"$S\",\"slotEnd\":\"$E\",\"reason\":\"期中汇报演示\"}")
+  AID=$(field id)
+  [ -n "$AID" ] && break
+  sub "时段 $(printf %s "$S" | cut -c12-16) 已被占用，换下一个（第 $attempt 次）"
+done
 
 # 只挑关键字段展示，长 JSON 投屏看不清
-field() { printf '%s' "$appt" | grep -o "\"$1\":\"\?[^,\"}]*" | head -1 | sed 's/^[^:]*://; s/^"//'; }
-AID=$(field id); ANAME=$(field petName); AOWNER=$(field ownerName)
+ANAME=$(field petName); AOWNER=$(field ownerName)
 ADOC=$(field doctorName); ASPEC=$(field doctorSpecialty); AST=$(field status)
-printf '   → id=%s  petName=%s  ownerName=%s\n' "$AID" "$ANAME" "$AOWNER"
-printf '   → doctorName=%s（%s）  status=%s\n' "$ADOC" "$ASPEC" "$AST"
 
-case "$appt" in
-  *"$PET_NAME"*) ok "响应里带着远端宠物名「$PET_NAME」—— 是实时 HTTP 调用，不是复制字段" ;;
-  *) bad "未取到宠物名：$appt" ;;
-esac
-case "$appt" in
-  *"李医生"*) ok "也带着远端医生名「李医生」—— 一次预约校验了两个服务" ;;
-  *) bad "未取到医生名" ;;
-esac
+if [ -z "$AID" ]; then
+  bad "创建预约失败，已换 3 个时段（最后返回：$(printf '%s' "$appt" | tr -d '\n' | cut -c1-90)）"
+else
+  printf '   → id=%s  petName=%s  ownerName=%s\n' "$AID" "$ANAME" "$AOWNER"
+  printf '   → doctorName=%s（%s）  status=%s\n' "$ADOC" "$ASPEC" "$AST"
+  case "$appt" in
+    *"$PET_NAME"*) ok "响应里带着远端宠物名「$PET_NAME」—— 是实时 HTTP 调用，不是复制字段" ;;
+    *) bad "未取到宠物名" ;;
+  esac
+  case "$appt" in
+    *"李医生"*) ok "也带着远端医生名「李医生」—— 一次预约校验了两个服务" ;;
+    *) bad "未取到医生名" ;;
+  esac
+fi
 next
 
 # ---------------------------------------------------------------- 4

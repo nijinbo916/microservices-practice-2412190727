@@ -95,11 +95,15 @@ echo " 4) appointment-service：跨服务创建预约（201）"
 echo "    创建前自动调用 pet-service / doctor-service 校验"
 echo "=============================================="
 # 每次运行随机挑一个未来时段，避免与历史数据撞号源（同一医生同一时段唯一）
-SLOT_DAY=$((3 + RANDOM % 5))
+# 取 20-59 天后，避开近期已被历次测试占用的时段
+SLOT_DAY=$((20 + RANDOM % 40))
 SLOT_HOUR=$((8 + RANDOM % 9))
 SLOT_MIN=$(( (RANDOM % 6) * 10 ))
-FUTURE_START=$(printf '%s' "$(date -d "+${SLOT_DAY} day" +%Y-%m-%d 2>/dev/null || date -v+${SLOT_DAY}d +%Y-%m-%d)T$(printf %02d $SLOT_HOUR):$(printf %02d $SLOT_MIN):00")
-FUTURE_END=$(printf '%s' "$(date -d "+${SLOT_DAY} day" +%Y-%m-%d 2>/dev/null || date -v+${SLOT_DAY}d +%Y-%m-%d)T$(printf %02d $SLOT_HOUR):$(printf %02d $((SLOT_MIN + 30))):00")
+# 结束时间必须让 date 去加，手工 M+30 会算出 15:70 这种非法值
+SLOT_DATE=$(date -d "+${SLOT_DAY} day" +%Y-%m-%d 2>/dev/null || date -v+${SLOT_DAY}d +%Y-%m-%d)
+FUTURE_START="${SLOT_DATE}T$(printf %02d $SLOT_HOUR):$(printf %02d $SLOT_MIN):00"
+SLOT_EPOCH=$(date -d "${SLOT_DATE} $(printf %02d $SLOT_HOUR):$(printf %02d $SLOT_MIN):00" +%s)
+FUTURE_END=$(date -d "@$((SLOT_EPOCH + 1800))" +%Y-%m-%dT%H:%M:00)
 appt_resp=$(curl -s -m 15 -X POST "$APPT/api/appointments" \
   -H "Content-Type: application/json" \
   -d "{\"petId\":$PET_ID,\"doctorId\":1,\"slotStart\":\"$FUTURE_START\",\"slotEnd\":\"$FUTURE_END\",\"reason\":\"冒烟测试预约\"}" || true)
@@ -156,8 +160,9 @@ if [ "${1:-}" = "--with-dependency-down" ]; then
   RECOVER_PET=$(curl -s -m 10 -X POST "http://localhost:${PET_PORT}/api/pets" \
     -H "Content-Type: application/json" \
     -d "{\"name\":\"恢复验证宠物$(date +%H%M%S)\",\"species\":\"猫\",\"breed\":\"英短\",\"ownerName\":\"倪先生\",\"ownerPhone\":\"13800000001\",\"weightKg\":4.20}" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
-  RECOVER_START=$(printf '%s' "$(date -d "+${SLOT_DAY} day" +%Y-%m-%d 2>/dev/null || date -v+${SLOT_DAY}d +%Y-%m-%d)T$(printf %02d $((SLOT_HOUR + 3))):$(printf %02d $SLOT_MIN):00")
-  RECOVER_END=$(printf '%s' "$(date -d "+${SLOT_DAY} day" +%Y-%m-%d 2>/dev/null || date -v+${SLOT_DAY}d +%Y-%m-%d)T$(printf %02d $((SLOT_HOUR + 3))):$(printf %02d $((SLOT_MIN + 30))):00")
+  RECOVER_START="${SLOT_DATE}T$(printf %02d $((SLOT_HOUR + 3))):$(printf %02d $SLOT_MIN):00"
+  RECOVER_EPOCH=$(date -d "${SLOT_DATE} $(printf %02d $((SLOT_HOUR + 3))):$(printf %02d $SLOT_MIN):00" +%s)
+  RECOVER_END=$(date -d "@$((RECOVER_EPOCH + 1800))" +%Y-%m-%dT%H:%M:00)
   rec_resp=$(curl -s -m 15 -X POST "$APPT/api/appointments" \
     -H "Content-Type: application/json" \
     -d "{\"petId\":${RECOVER_PET:-0},\"doctorId\":1,\"slotStart\":\"$RECOVER_START\",\"slotEnd\":\"$RECOVER_END\",\"reason\":\"恢复后验证\"}" || true)
