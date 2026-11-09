@@ -22,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <h3>创建预约的完整流程（跨服务 HTTP 协作）</h3>
  * <ol>
  *   <li>校验时段自身合法（400）；</li>
- *   <li><b>RestTemplate 调用 pet-service</b> 校验宠物（404/503 则中止，不写库）；</li>
- *   <li><b>RestTemplate 调用 doctor-service</b> 校验医生并取 dailyCapacity（中止条件同上）；</li>
+ *   <li><b>OpenFeign 按服务名调用 pet-service</b> 校验宠物（404/503 则中止，不写库）；</li>
+ *   <li><b>OpenFeign 按服务名调用 doctor-service</b> 校验医生并取 dailyCapacity（中止条件同上）；</li>
  *   <li>本地号源规则：时段冲突 → 409；每日有效预约数 ≥ dailyCapacity → 409；</li>
  *   <li>落库：只存 petId / doctorId（逻辑外键），不存对方数据副本。</li>
  * </ol>

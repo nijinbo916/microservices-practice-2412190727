@@ -2,10 +2,8 @@ package com.zjgsu.njb.appointment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
 
 import com.zjgsu.njb.appointment.domain.Appointment;
 import com.zjgsu.njb.appointment.dto.AppointmentResponse;
@@ -13,41 +11,47 @@ import com.zjgsu.njb.appointment.dto.CreateAppointmentRequest;
 import com.zjgsu.njb.appointment.exception.BusinessRuleException;
 import com.zjgsu.njb.appointment.exception.DependencyUnavailableException;
 import com.zjgsu.njb.appointment.exception.ResourceNotFoundException;
+import com.zjgsu.njb.appointment.remote.DoctorFeignClient;
+import com.zjgsu.njb.appointment.remote.DoctorView;
+import com.zjgsu.njb.appointment.remote.PetFeignClient;
+import com.zjgsu.njb.appointment.remote.PetView;
 import com.zjgsu.njb.appointment.repository.AppointmentRepository;
 import com.zjgsu.njb.appointment.service.AppointmentService;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * appointment-service 业务规则 + 跨服务调用测试（H2 + MockRestServiceServer）。
+ * appointment-service 业务规则 + 跨服务调用测试（H2 + Mockito 桩 OpenFeign 客户端）。
  *
- * <p>覆盖四条业务规则中的三条（时段合法在 DTO 校验层）以及
+ * <p>第 08 周起跨服务调用走 OpenFeign：测试直接用 {@code @MockitoBean}
+ * 替换 {@link PetFeignClient} / {@link DoctorFeignClient}，不连接真实 Nacos，
+ * 也不会发起真实 HTTP 请求；失败场景抛出的 {@code FeignException}
+ * 由 {@code FeignStubs.error(status)} 构造，与容器内真实失败类型一致。</p>
+ *
+ * <p>覆盖业务规则（时段冲突、每日上限）以及
  * 「依赖资源不存在 / 依赖服务不可用时绝不写入本地数据」的关键语义。</p>
  */
 @SpringBootTest
 @ActiveProfiles("test")
 class AppointmentServiceTest {
 
+    // 预约时间必须晚于当前时间（DTO @Future 校验），所以用动态未来时间，避免测试数据「过期」
+    private static final LocalDateTime T1 =
+            LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).plusDays(3);
+    private static final LocalDateTime T2 = T1.plusMinutes(30);
 
-    /** 模拟 DiscoveryClient：把服务名解析到 *-stub:8080，不连接真实 Nacos。 */
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    private org.springframework.cloud.client.discovery.DiscoveryClient discoveryClient;
+    /** 替换真实 Feign 客户端：不连接 Nacos，不发真实请求。 */
+    @MockitoBean
+    private PetFeignClient petFeignClient;
 
-    private void stubDiscovery() {
-        org.mockito.Mockito.when(discoveryClient.getInstances("pet-service"))
-                .thenReturn(java.util.List.of(new org.springframework.cloud.client.DefaultServiceInstance(
-                        "pet-1", "pet-service", "pet-service-stub", 8080, false)));
-        org.mockito.Mockito.when(discoveryClient.getInstances("doctor-service"))
-                .thenReturn(java.util.List.of(new org.springframework.cloud.client.DefaultServiceInstance(
-                        "doctor-1", "doctor-service", "doctor-service-stub", 8080, false)));
-    }
+    @MockitoBean
+    private DoctorFeignClient doctorFeignClient;
 
     @Autowired
     private AppointmentService appointmentService;
@@ -55,35 +59,19 @@ class AppointmentServiceTest {
     @Autowired
     private AppointmentRepository appointmentRepository;
 
-    @Autowired
-    private RestTemplate restTemplate;
-
-    private MockRestServiceServer remote;
-
-    private static final LocalDateTime T1 =
-            LocalDateTime.of(2026, 11, 5, 10, 0);
-    private static final LocalDateTime T2 =
-            LocalDateTime.of(2026, 11, 5, 10, 30);
-
     @BeforeEach
     void setUp() {
-        remote = MockRestServiceServer.bindTo(restTemplate).build();
         appointmentRepository.deleteAll();
-        stubDiscovery();
     }
 
     private void stubPetOk(long petId) {
-        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/" + petId))
-                .andRespond(withSuccess(
-                        "{\"id\":" + petId + ",\"name\":\"豆豆\",\"species\":\"犬\",\"ownerName\":\"倪先生\"}",
-                        MediaType.APPLICATION_JSON));
+        when(petFeignClient.getPet(petId)).thenReturn(
+                new PetView(petId, "豆豆", "犬", "倪先生"));
     }
 
     private void stubDoctorOk(long doctorId) {
-        remote.expect(requestTo("http://doctor-service-stub:8080/api/doctors/" + doctorId))
-                .andRespond(withSuccess(
-                        "{\"id\":" + doctorId + ",\"name\":\"李医生\",\"specialty\":\"内科\",\"dailyCapacity\":4}",
-                        MediaType.APPLICATION_JSON));
+        when(doctorFeignClient.getDoctor(doctorId)).thenReturn(
+                new DoctorView(doctorId, "李医生", "内科", 4));
     }
 
     private CreateAppointmentRequest request(long petId, long doctorId) {
@@ -110,33 +98,29 @@ class AppointmentServiceTest {
         Appointment stored = appointmentRepository.findById(created.id()).orElseThrow();
         assertThat(stored.getPetId()).isEqualTo(1L);
         assertThat(stored.getDoctorId()).isEqualTo(1L);
-        remote.verify();
     }
 
     @Test
     void missingPetBlocksLocalWrite() {
-        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/999"))
-                .andRespond(withStatus(org.springframework.http.HttpStatus.NOT_FOUND));
+        // Feign 收到远端 404：与容器内真实 404 同类型的 FeignException.NotFound
+        when(petFeignClient.getPet(999L)).thenThrow(FeignStubs.error(404, "getPet"));
 
         assertThatThrownBy(() -> appointmentService.createAppointment(request(999, 1)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("宠物不存在");
         // 关键断言：校验失败时本地数据库没有任何写入
         assertThat(appointmentRepository.count()).isZero();
-        remote.verify();
     }
 
     @Test
     void dependencyDownBlocksLocalWrite() {
         // pet-service 返回 500（等价于服务不可用/异常）
-        remote.expect(requestTo("http://pet-service-stub:8080/api/pets/1"))
-                .andRespond(withServerError());
+        when(petFeignClient.getPet(1L)).thenThrow(FeignStubs.error(500, "getPet"));
 
         assertThatThrownBy(() -> appointmentService.createAppointment(request(1, 1)))
                 .isInstanceOf(DependencyUnavailableException.class)
                 .hasMessageContaining("pet-service");
         assertThat(appointmentRepository.count()).isZero();
-        remote.verify();
     }
 
     @Test
@@ -146,10 +130,6 @@ class AppointmentServiceTest {
         appointmentService.createAppointment(request(1, 1));
 
         // 第二次预约同医生交叉时段：10:15 ~ 10:45
-        remote = MockRestServiceServer.bindTo(restTemplate).build();
-        stubPetOk(1);
-        stubDoctorOk(1);
-
         assertThatThrownBy(() -> appointmentService.createAppointment(
                 new CreateAppointmentRequest(1L, 1L,
                         T1.plusMinutes(15), T1.plusMinutes(45), "交叉时段")))
@@ -158,14 +138,28 @@ class AppointmentServiceTest {
     }
 
     @Test
+    void dailyCapacityLimitRejected() {
+        stubPetOk(1);
+        stubDoctorOk(1); // dailyCapacity = 4
+        // 同一天内 4 个互不重叠的整点时段，恰好填满每日上限
+        for (int i = 0; i < 4; i++) {
+            LocalDateTime start = T1.plusHours(i);
+            appointmentService.createAppointment(
+                    new CreateAppointmentRequest(1L, 1L, start, start.plusMinutes(30), "第 " + i + " 次"));
+        }
+        // 第 5 次：仍是同一天，当日预约数已达上限
+        assertThatThrownBy(() -> appointmentService.createAppointment(
+                new CreateAppointmentRequest(1L, 1L, T1.plusHours(4), T1.plusHours(4).plusMinutes(30), "超限")))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("号源已满");
+    }
+
+    @Test
     void cancelTwiceRejected() {
         stubPetOk(2);
         stubDoctorOk(1);
         AppointmentResponse created = appointmentService.createAppointment(request(2, 1));
 
-        remote = MockRestServiceServer.bindTo(restTemplate).build();
-        stubPetOk(2);
-        stubDoctorOk(1);
         appointmentService.cancelAppointment(created.id());
 
         assertThatThrownBy(() -> appointmentService.cancelAppointment(created.id()))
@@ -177,5 +171,17 @@ class AppointmentServiceTest {
     void missingAppointmentReturns404() {
         assertThatThrownBy(() -> appointmentService.getAppointment(424242L))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void listDegradesWhenRemoteDown() {
+        stubPetOk(1);
+        stubDoctorOk(1);
+        AppointmentResponse created = appointmentService.createAppointment(request(1, 1));
+        when(petFeignClient.getPet(anyLong())).thenThrow(FeignStubs.error(503, "getPet"));
+
+        // 弱依赖降级：列表仍能返回，只是 petName 为 null
+        var list = appointmentService.listAppointments(null, null);
+        assertThat(list).extracting(AppointmentResponse::id).containsExactly(created.id());
     }
 }

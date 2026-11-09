@@ -15,6 +15,16 @@ spring:
         group: ${NACOS_GROUP:PERSONAL_GROUP}
         namespace: ${NACOS_NAMESPACE:}
         register-enabled: ${NACOS_REGISTER_ENABLED:true}
+      # ---- 第 08 周：OpenFeign 客户端配置 ----
+      # @FeignClient 按 pet.service-name / doctor.service-name 发起调用，
+      # 超时不可省：依赖服务卡死不能拖死本服务（连接 3s / 读取 5s）
+      openfeign:
+        client:
+          config:
+            default:
+              connect-timeout: 3000
+              read-timeout: 5000
+              logger-level: basic
 
   datasource:
     url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_appointment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
@@ -35,9 +45,6 @@ pet:
   service-name: ${PET_SERVICE_NAME:pet-service}
 doctor:
   service-name: ${DOCTOR_SERVICE_NAME:doctor-service}
-remote:
-  connect-timeout-ms: 3000
-  read-timeout-ms: 5000
 
 server:
   port: 8080

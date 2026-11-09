@@ -2,57 +2,54 @@ package com.zjgsu.njb.appointment.remote;
 
 import com.zjgsu.njb.appointment.exception.DependencyUnavailableException;
 import com.zjgsu.njb.appointment.exception.ResourceNotFoundException;
-import java.net.URI;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import feign.FeignException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestTemplate;
 
 /**
- * doctor-service 的 HTTP 客户端（RestTemplate + Nacos 服务发现）。
+ * doctor-service 的调用门面（第 08 周：底层从 RestTemplate 换成 OpenFeign）。
  *
- * <p>地址同样由 {@link ServiceLookup} 按服务名实时解析；
- * 除校验医生存在外，还取回 {@code dailyCapacity} 供「每日号源上限」规则使用。
- * 失败语义与 {@link PetClient} 一致：强依赖失败一律阻止预约写入。</p>
+ * <p>除校验医生存在外，还取回 {@code dailyCapacity} 供「每日号源上限」规则使用。
+ * 失败语义与 {@link PetClient} 一致：强依赖失败一律阻止预约写入，
+ * 绝不把调用失败当成业务成功。</p>
  */
 @Component
 public class DoctorClient {
 
-    private final RestTemplate restTemplate;
-    private final ServiceLookup serviceLookup;
-    private final String serviceName;
+    private static final Logger log = LoggerFactory.getLogger(DoctorClient.class);
 
-    public DoctorClient(RestTemplate restTemplate,
-                        ServiceLookup serviceLookup,
-                        @Value("${doctor.service-name:doctor-service}") String serviceName) {
-        this.restTemplate = restTemplate;
-        this.serviceLookup = serviceLookup;
-        this.serviceName = serviceName;
+    private final DoctorFeignClient doctorFeignClient;
+
+    public DoctorClient(DoctorFeignClient doctorFeignClient) {
+        this.doctorFeignClient = doctorFeignClient;
     }
 
     /** 校验医生存在并返回视图（强依赖）。 */
     public DoctorView requireDoctor(Long id) {
-        URI base = serviceLookup.resolve(serviceName);
-        String url = base + "/api/doctors/" + id;
         try {
-            ResponseEntity<DoctorView> resp = restTemplate.getForEntity(url, DoctorView.class);
-            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+            DoctorView doctor = doctorFeignClient.getDoctor(id);
+            if (doctor == null) {
                 throw new DependencyUnavailableException(
-                        "doctor-service 返回异常状态 " + resp.getStatusCode() + "：/api/doctors/" + id);
+                        "doctor-service 返回空响应：/api/doctors/" + id);
             }
-            return resp.getBody();
-        } catch (HttpStatusCodeException e) {
-            if (e.getStatusCode().value() == 404) {
-                throw new ResourceNotFoundException(
-                        "医生不存在（doctor-service 校验返回 404）：id=" + id);
+            return doctor;
+        } catch (FeignException.NotFound e) {
+            log.info("doctor-service 校验 404：医生不存在 id={}", id);
+            throw new ResourceNotFoundException(
+                    "医生不存在（doctor-service 校验返回 404）：id=" + id);
+        } catch (FeignException e) {
+            log.warn("doctor-service 调用失败：HTTP {}（{}）", e.status(), e.getMessage());
+            throw new DependencyUnavailableException(
+                    "doctor-service 不可用（HTTP " + e.status() + "），已阻止本次预约写入");
+        } catch (RuntimeException e) {
+            String msg = String.valueOf(e.getMessage()).toLowerCase();
+            if (msg.contains("instance") || msg.contains("load balancer") || msg.contains("loadbalancer")) {
+                log.warn("doctor-service 没有可用实例：{}", e.getMessage());
+                throw new DependencyUnavailableException(
+                        "doctor-service 当前没有可用实例（负载均衡器返回空实例列表），已阻止本次预约写入");
             }
-            throw new DependencyUnavailableException(
-                    "doctor-service 返回错误 " + e.getStatusCode() + "，已阻止本次预约写入");
-        } catch (ResourceAccessException e) {
-            throw new DependencyUnavailableException(
-                    "doctor-service 不可达（" + rootCause(e) + "），已阻止本次预约写入");
+            throw e;
         }
     }
 
@@ -63,10 +60,5 @@ public class DoctorClient {
         } catch (ResourceNotFoundException | DependencyUnavailableException e) {
             return null;
         }
-    }
-
-    private static String rootCause(ResourceAccessException e) {
-        Throwable c = e.getCause() != null ? e.getCause() : e;
-        return c.getClass().getSimpleName() + ": " + c.getMessage();
     }
 }

@@ -1,0 +1,22 @@
+# =====================================================================
+# 第 08 周 · 负载均衡多实例覆盖文件（随仓库提交）
+#
+# 背景：compose.yaml 里 pet-service 绑定了固定宿主机端口（PET_PORT:8080），
+#       固定端口 + 固定容器名会让第二个实例无法启动（端口冲突 / 容器重名）。
+#
+# 用法（被调用服务 pet-service 启动 2 个实例）：
+#   docker compose -f compose.yaml -f compose.lb.yaml up -d --scale pet-service=2
+#
+# 说明：
+#   - ports / container_name 用 Compose 的 !reset 标签真正「清空」
+#     （覆盖文件中的序列默认是追加而不是替换，不用 !reset 无法解除基文件的端口绑定）；
+#   - 解除宿主机端口绑定后，各 pet-service 实例只在容器网络内监听 8080，
+#     互不占用宿主机端口，满足「避免实例绑定同一个宿主机端口」的要求；
+#   - 调用方 appointment-service 不感知实例数量：仍按服务名 pet-service 调用，
+#     由 Nacos 实例列表 + Spring Cloud LoadBalancer 在两个实例间分发流量；
+#   - docker compose ps / logs pet-service 可看到 pet-service-1 / pet-service-2 两个实例。
+# =====================================================================
+services:
+  pet-service:
+    container_name: !reset null
+    ports: !reset null

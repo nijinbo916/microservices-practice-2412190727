@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------------
 # test profile：单元测试专用配置（H2 内存数据库）
-# 跨服务按服务名寻址，测试用假 DiscoveryClient 解析到 *-stub:8080，
-# 再由 MockRestServiceServer 拦截 RestTemplate 请求，不会发起真实网络调用
+# 第 08 周：跨服务调用走 OpenFeign，测试用 @MockitoBean 替换 PetFeignClient / DoctorFeignClient，
+# 不会连接 Nacos，也不会发起真实网络调用
 # ----------------------------------------------------------------------
 spring:
   # 单元测试不依赖真实 Nacos：关闭注册与发现，由测试用假 DiscoveryClient 代替
