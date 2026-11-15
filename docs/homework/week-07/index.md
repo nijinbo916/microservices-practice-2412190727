@@ -172,3 +172,7 @@ spring:
 4. **Boot 4 与 Nacos 依赖版本匹配**：选用 `spring-cloud-dependencies 2025.1.0`
    （对应 Spring Boot 4.0.x）+ `spring-cloud-alibaba-dependencies 2025.1.0.0`，
    由 BOM 统一管理，服务内不覆盖 nacos-client 版本。
+5. **容器并发启动过密导致 Docker 引擎假死**：五个 JVM 容器同时拉起时，
+   引擎偶发对 `docker ps` 等命令无响应（超时）。处理：控制同时运行的容器数量、
+   必要时重启 Docker Desktop 恢复。该现象属本地环境的资源约束，与应用代码无关；
+   演示与验证均使用预构建镜像，减少现场启动环节。
