@@ -1,0 +1,91 @@
+# =====================================================================
+# gateway-service 默认配置（第 09 周 · 统一入口 + JWT 鉴权）
+#
+# 配置前缀说明（踩过的坑）：
+#   Spring Cloud Gateway 5.x 把 spring.cloud.gateway.* 改成了
+#   spring.cloud.gateway.server.webflux.*，用旧前缀不会报错，
+#   但路由静默不生效、访问全部 404。本文件用新前缀。
+# =====================================================================
+server:
+  # 统一对外端口：本系统只有这一个端口暴露给客户端
+  port: 8080
+
+spring:
+  application:
+    name: gateway-service
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        group: ${NACOS_GROUP:PERSONAL_GROUP}
+        namespace: ${NACOS_NAMESPACE:}
+        register-enabled: ${NACOS_REGISTER_ENABLED:true}
+
+    gateway:
+      server:
+        webflux:
+          # ---- 路由表：4 条，目标全部写服务名（lb://），不写 IP ----
+          routes:
+            # 1) 宠物档案 → pet-service
+            - id: pet-service
+              uri: lb://pet-service
+              predicates:
+                - Path=/api/pets/**
+
+            # 2) 医生主数据 → doctor-service
+            - id: doctor-service
+              uri: lb://doctor-service
+              predicates:
+                - Path=/api/doctors/**
+
+            # 3) 预约流程 → appointment-service
+            - id: appointment-service
+              uri: lb://appointment-service
+              predicates:
+                - Path=/api/appointments/**
+
+            # 4) 登录与管理端 → pet-service（认证服务所在的服务）
+            #    为什么管理端也放这里：用户/角色表在 pet-service，
+            #    网关不持有数据，只做转发和鉴权
+            - id: auth-service
+              uri: lb://pet-service
+              predicates:
+                - Path=/api/auth/**,/api/admin/**
+
+          # 跨域：网关是唯一入口，CORS 也只在网关配一处，下游不再重复配置
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origin-patterns: "*"
+                allowed-methods: "*"
+                allowed-headers: "*"
+                exposed-headers:
+                  - Authorization
+
+app:
+  security:
+    # HS256 密钥，必须 >= 32 字节；与 pet-service 的 app.security.jwt-secret 一致
+    # 真实值只放 .env，仓库里是占位符
+    jwt-secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-0123456789abcdef}
+    issuer: ${JWT_ISSUER:petclinic-auth}
+    # 网关向下游证明身份的共享密钥，下游（pet-service）会比对
+    trusted-caller: ${TRUSTED_CALLER_SECRET:dev-only-trusted-caller-change-me}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      access: unrestricted   # 只读路由表，作业里要截图证明 4 条路由已加载
+
+logging:
+  level:
+    root: info
+    com.zjgsu.njb.gateway: info

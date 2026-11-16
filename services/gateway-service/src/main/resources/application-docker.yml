@@ -1,0 +1,26 @@
+# =====================================================================
+# gateway-service docker profile：容器内运行
+#
+# 与默认配置的差别只有日志级别 —— 路由、密钥、Nacos 地址全部沿用
+# application.yml 里的环境变量占位，不在这里重复写一遍，
+# 避免两处配置漂移（改了默认值忘了改 docker）。
+# =====================================================================
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+
+logging:
+  level:
+    root: info
+    com.zjgsu.njb.gateway: info

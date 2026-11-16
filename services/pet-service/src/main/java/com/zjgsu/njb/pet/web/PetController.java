@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,5 +53,18 @@ public class PetController {
     @GetMapping("/{id}")
     public PetResponse get(@PathVariable Long id) {
         return petService.getPet(id);
+    }
+
+    /**
+     * 删除宠物档案（第 09 周新增，用于演示「越权拦截」）。
+     *
+     * <p>这个接口只有 ADMIN 能调：网关按 {@code DELETE /api/pets/** -> ADMIN}
+     * 的规则拦，非管理员在网关就被 403 掉，请求进不到这里。
+     * 服务里不再重复判断角色 —— 网关已经是这条规则的唯一权威。</p>
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        petService.deletePet(id);
+        return ResponseEntity.noContent().build();
     }
 }

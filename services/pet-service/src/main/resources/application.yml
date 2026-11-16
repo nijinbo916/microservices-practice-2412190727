@@ -51,3 +51,21 @@ management:
 logging:
   level:
     root: info
+
+# =====================================================================
+# 第 09 周 · 认证与网关信任
+#   jwt-secret 必须与 gateway-service 的 app.security.jwt-secret 完全一致，
+#   否则网关验签全部失败（表现为登录成功但带 token 访问全是 401）。
+#   真实值放 .env；这里的默认值只够本地跑通，上线必须替换。
+# =====================================================================
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:dev-only-jwt-secret-change-me-0123456789abcdef}
+    issuer: ${JWT_ISSUER:petclinic-auth}
+    ttl-minutes: ${JWT_TTL_MINUTES:60}
+    # 测试账号初始密码：仅演示用，README 写着必须替换
+    seed-password: ${APP_SEED_PASSWORD:Passw0rd-demo-2026}
+    # 与网关 trusted-caller 一致，用来识别「这个请求过了网关」
+    trusted-caller: ${TRUSTED_CALLER_SECRET:dev-only-trusted-caller-change-me}
+    # 本地用 MockMvc 跑测试时直连控制器，测试配置里会关掉
+    trust-enabled: ${GATEWAY_TRUST_ENABLED:true}

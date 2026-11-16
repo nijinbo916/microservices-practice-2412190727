@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  构建阶段使用的 Maven 配置：把中央仓库指向国内镜像。
+
+  原因：Docker 容器内直连 repo.maven.apache.org 实测只有 4~30 KB/s，
+  拉完 Spring Boot 全部依赖需要很久；换成阿里云镜像后可达数 MB/s。
+  只影响「构建镜像时下载依赖」，不影响运行时行为。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              https://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <mirrors>
+        <mirror>
+            <id>aliyun-public</id>
+            <name>Aliyun Maven Public Mirror</name>
+            <url>https://maven.aliyun.com/repository/public</url>
+            <mirrorOf>central</mirrorOf>
+        </mirror>
+    </mirrors>
+
+</settings>

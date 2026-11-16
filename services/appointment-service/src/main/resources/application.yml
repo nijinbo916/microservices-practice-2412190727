@@ -68,3 +68,12 @@ management:
 logging:
   level:
     root: info
+
+# =====================================================================
+# 第 09 周：跨服务调用凭证
+# 本服务不签也不验 JWT，只在与同栈服务通信时带上「内部调用」凭证，
+# 让对方知道这不是外部直连。值与网关的 trusted-caller 相同。
+# =====================================================================
+app:
+  security:
+    trusted-caller: ${TRUSTED_CALLER_SECRET:dev-only-trusted-caller-change-me}

@@ -108,7 +108,7 @@ services:
     build:
       context: ./services/pet-service
       dockerfile: Dockerfile
-    image: petclinic-pet-service:week07
+    image: petclinic-pet-service:week09
     container_name: petclinic-pet-service
     restart: unless-stopped
     depends_on:
@@ -126,9 +126,18 @@ services:
       NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
       NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
       NACOS_REGISTER_ENABLED: "true"
+      # ---- 第 09 周：认证与网关信任 ----
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-petclinic-auth}
+      JWT_TTL_MINUTES: ${JWT_TTL_MINUTES:-60}
+      APP_SEED_PASSWORD: ${APP_SEED_PASSWORD}
+      TRUSTED_CALLER_SECRET: ${TRUSTED_CALLER_SECRET}
+      GATEWAY_TRUST_ENABLED: "true"
       TZ: Asia/Shanghai
     ports:
-      - "${PET_PORT:-8081}:8080"
+      # 只绑 127.0.0.1：宿主机本机可以直连（用于验证「直连被拒」），
+      # 局域网/外网访问不到，唯一对外入口是 gateway-service 的 8080
+      - "127.0.0.1:${PET_PORT:-8084}:8080"
     networks:
       - petclinic-net
     healthcheck:
@@ -145,7 +154,7 @@ services:
     build:
       context: ./services/doctor-service
       dockerfile: Dockerfile
-    image: petclinic-doctor-service:week07
+    image: petclinic-doctor-service:week09
     container_name: petclinic-doctor-service
     restart: unless-stopped
     depends_on:
@@ -165,7 +174,8 @@ services:
       NACOS_REGISTER_ENABLED: "true"
       TZ: Asia/Shanghai
     ports:
-      - "${DOCTOR_PORT:-8082}:8080"
+      # 仅供本机调试；对外只允许走 gateway
+      - "127.0.0.1:${DOCTOR_PORT:-8082}:8080"
     networks:
       - petclinic-net
     healthcheck:
@@ -183,7 +193,7 @@ services:
     build:
       context: ./services/appointment-service
       dockerfile: Dockerfile
-    image: petclinic-appointment-service:week07
+    image: petclinic-appointment-service:week09
     container_name: petclinic-appointment-service
     restart: unless-stopped
     depends_on:
@@ -203,9 +213,59 @@ services:
       NACOS_REGISTER_ENABLED: "true"
       # 注意：已删除 PET_SERVICE_URL / DOCTOR_SERVICE_URL，
       # 跨服务地址改由 Nacos 服务名 + 实例发现决定，不再使用 compose 固定 DNS
+      # 第 09 周：跨服务调用要带上与网关相同的可信凭证，
+      # 否则 pet-service 的信任过滤器会把 Feign 调用当成「绕过网关的直连」拒掉
+      TRUSTED_CALLER_SECRET: ${TRUSTED_CALLER_SECRET}
       TZ: Asia/Shanghai
     ports:
-      - "${APPOINTMENT_PORT:-8083}:8080"
+      # 仅供本机调试；对外只允许走 gateway
+      - "127.0.0.1:${APPOINTMENT_PORT:-8083}:8080"
+    networks:
+      - petclinic-net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+
+  # -------------------------------------------------------------------
+  # gateway-service：API Gateway（第 09 周新增）
+  #
+  #   - 唯一对外发布端口（0.0.0.0:8080），客户端只知道这一个地址
+  #   - 4 条路由的目标都写服务名（lb://pet-service 等），实例由 Nacos 提供
+  #   - 全局过滤器校验 JWT：未登录 401、越权 403，请求不会传到下游
+  #   - 校验通过后剥掉客户端伪造的身份头，再注入 X-Auth-* 与 X-Trusted-Caller
+  #
+  #   注意：本服务不能依赖 spring-boot-starter-web，
+  #         必须运行在 REACTIVE 模式，否则路由不会装配（见 Dockerfile 注释）
+  # -------------------------------------------------------------------
+  gateway-service:
+    build:
+      context: ./services/gateway-service
+      dockerfile: Dockerfile
+    image: petclinic-gateway-service:week09
+    container_name: petclinic-gateway
+    restart: unless-stopped
+    depends_on:
+      nacos:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME}
+      NACOS_PASSWORD: ${NACOS_PASSWORD}
+      NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
+      NACOS_REGISTER_ENABLED: "true"
+      # 必须与 pet-service 的 JWT_SECRET 完全一致，否则验签全失败
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-petclinic-auth}
+      TRUSTED_CALLER_SECRET: ${TRUSTED_CALLER_SECRET}
+      TZ: Asia/Shanghai
+    ports:
+      # 唯一对外端口：其他服务都只绑 127.0.0.1
+      - "${GATEWAY_PORT:-8080}:8080"
     networks:
       - petclinic-net
     healthcheck:
@@ -216,7 +276,7 @@ services:
       start_period: 40s
 
 # ---------------------------------------------------------------------
-# 共享网络：四个容器加入同一 bridge 网络，
+# 共享网络：所有容器加入同一 bridge 网络，
 # 服务名 pet-service / doctor-service / mysql 由 Compose 内建 DNS 解析
 # ---------------------------------------------------------------------
 networks:

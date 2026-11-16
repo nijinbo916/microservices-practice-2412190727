@@ -60,6 +60,18 @@ public class PetService {
     }
 
     /**
+     * 删除宠物档案（第 09 周新增）。
+     *
+     * <p>先确认存在再删，保证「删不存在的 id」返回 404 而不是静默成功 ——
+     * 静默成功会让调用方以为删掉了别的东西。</p>
+     */
+    @Transactional
+    public void deletePet(Long id) {
+        Pet pet = requirePet(id);
+        petRepository.delete(pet);
+    }
+
+    /**
      * 获取实体。
      *
      * @throws ResourceNotFoundException 宠物不存在

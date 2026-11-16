@@ -62,3 +62,7 @@ logging:
   level:
     root: info
     com.zjgsu.njb.appointment: info
+
+app:
+  security:
+    trusted-caller: ${TRUSTED_CALLER_SECRET:dev-only-trusted-caller-change-me}

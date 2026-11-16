@@ -32,3 +32,19 @@ spring:
 logging:
   level:
     root: warn
+
+# ----------------------------------------------------------------------
+# 第 09 周：测试用安全配置
+#
+# trust-enabled=false：MockMvc 直连控制器，不经过网关，没有 X-Trusted-Caller，
+# 开着会让所有 /api/** 测试 401。生产/容器里必须是 true（默认值就是 true）。
+# jwt-secret 固定成本地测试串，不依赖环境变量，保证任何机器上都能跑。
+# ----------------------------------------------------------------------
+app:
+  security:
+    jwt-secret: test-only-jwt-secret-0123456789-abcdefghij
+    issuer: petclinic-auth
+    ttl-minutes: 30
+    seed-password: Test-Passw0rd-2026
+    trusted-caller: test-only-trusted-caller
+    trust-enabled: false

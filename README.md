@@ -457,7 +457,7 @@ curl -s -X POST http://localhost:8083/api/appointments \
 ### 6.4 测试命令（每个服务独立运行）
 
 ```bash
-cd services/pet-service         && ./mvnw test   # 6 个用例
+cd services/pet-service         && ./mvnw test   # 12 个用例（第 09 周追加 6 个认证用例）
 cd services/doctor-service      && ./mvnw test   # 5 个用例
 cd services/appointment-service && ./mvnw test   # 13 个用例（含模拟远端 404/500、实例列表为空）
 ```
@@ -544,7 +544,7 @@ bash scripts/smoke-test.sh --with-dependency-down
 ### 7.5 测试命令（不依赖真实 Nacos 与 MySQL）
 
 ```bash
-cd services/pet-service         && ./mvnw test   # 6 个用例
+cd services/pet-service         && ./mvnw test   # 12 个用例（第 09 周追加 6 个认证用例）
 cd services/doctor-service      && ./mvnw test   # 5 个用例
 cd services/appointment-service && ./mvnw test   # 13 个用例（含实例列表为空的 503 测试）
 ```
@@ -557,6 +557,123 @@ cd services/appointment-service && ./mvnw test   # 13 个用例（含实例列�
 
 ```bash
 docker compose down     # 保留数据卷：petclinic-ms-mysql-data / petclinic-nacos-data
+```
+
+---
+
+## 八、API Gateway 与 JWT 认证（第 09 周）
+
+三个业务服务之上加了一层网关：客户端只认 `http://localhost:8080` 一个地址，
+路由、鉴权、身份注入全部在网关完成。设计细节见 [docs/security.md](docs/security.md)。
+
+### 8.1 服务与端口
+
+| 服务 | 容器 | 宿主机端口 | 职责 |
+| --- | --- | --- | --- |
+| `gateway-service` | `petclinic-gateway` | **`8080`（唯一对外）** | 路由转发 + JWT 验签 + 角色校验 |
+| `pet-service` | `petclinic-pet-service` | `127.0.0.1:8084` | 宠物档案 + 登录签发 JWT + 管理端 |
+| `doctor-service` | `petclinic-doctor-service` | `127.0.0.1:8082` | 医生主数据 |
+| `appointment-service` | `petclinic-appointment-service` | `127.0.0.1:8083` | 预约流程 |
+
+业务服务端口只绑 `127.0.0.1`，局域网访问不到 —— 唯一入口是网关的 8080。
+
+### 8.2 测试账号与角色
+
+三个账号在 `pet-service` 启动时自动创建（已存在则跳过），密码用 BCrypt 哈希存库：
+
+| 账号 | 角色 | 能做什么 | 不能做什么 |
+| --- | --- | --- | --- |
+| `admin` | `ADMIN` | 所有接口；`GET /api/admin/summary`；`DELETE /api/pets/{id}` | — |
+| `doctor` | `DOCTOR` | 查宠物、查医生、查/建预约 | 建档（403）、管理端（403） |
+| `owner` | `OWNER` | 查宠物、建档、下单预约 | 管理端（403）、删除宠物（403） |
+
+**密码**：三个账号统一由环境变量 `APP_SEED_PASSWORD` 指定，写在本地 `.env`
+（已 gitignore，不随仓库提交）。运行 `scripts/auth-test.sh` 前先设置同名环境变量。
+
+> ⚠️ 这是课程演示账号，不是生产凭据。真实部署必须改掉，并把 `JWT_SECRET` /
+> `TRUSTED_CALLER_SECRET` 换成随机值（`openssl rand -base64 48`）。
+
+### 8.3 网关路由表
+
+| # | 路径 | 目标 | 鉴权 |
+| --- | --- | --- | --- |
+| 1 | `/api/pets/**` | `lb://pet-service` | 需登录；POST 需 OWNER/ADMIN，DELETE 需 ADMIN |
+| 2 | `/api/doctors/**` | `lb://doctor-service` | 需登录 |
+| 3 | `/api/appointments/**` | `lb://appointment-service` | 需登录；POST 需 OWNER/DOCTOR/ADMIN |
+| 4 | `/api/auth/**`、`/api/admin/**` | `lb://pet-service` | 登录公开；管理端需 ADMIN |
+
+`/api/health` 与 `/actuator/health` 是网关自己的健康检查，不走路由。
+
+### 8.4 启动
+
+```bash
+# 1) 准备变量（JWT_SECRET / TRUSTED_CALLER_SECRET / APP_SEED_PASSWORD）
+cp .env.example .env
+#    编辑 .env，三个密钥都填随机值；JWT_SECRET 网关与 pet-service 必须一致
+
+# 2) 起栈（Nacos 已 healthy 后业务服务才会启动）
+docker compose up -d --build
+
+# 3) 看状态：六个容器都应 healthy
+docker compose ps
+```
+
+### 8.5 验证
+
+```bash
+# 一键全套：未登录 401 / 登录拿 token / 带 token 200 / 越权 403
+#           伪造身份头仍被拒 / 直连绕过被拒
+export APP_SEED_PASSWORD='<.env 里的值>'
+bash scripts/auth-test.sh
+
+# 手动走一遍
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<密码>"}' | sed -nE 's/.*"accessToken":"([^"]+)".*/\1/p')
+
+curl -i http://localhost:8080/api/pets      -H "Authorization: Bearer $TOKEN"   # 200
+curl -i http://localhost:8080/api/admin/summary -H "Authorization: Bearer $TOKEN"  # 200
+
+# 未登录 → 401
+curl -i http://localhost:8080/api/pets
+
+# 直连业务服务（绕过网关）→ 401 DIRECT_ACCESS_DENIED
+curl -i http://127.0.0.1:8084/api/pets
+
+# 路由表是否加载（应为 4 条）
+curl -s http://localhost:8080/actuator/gateway/routes | head -c 800
+```
+
+### 8.6 测试与结构
+
+```bash
+cd services/gateway-service && ./mvnw test   # 11 个：验签 5 + 规则 6
+cd services/pet-service     && ./mvnw test   # 12 个：档案 6 + 认证 6
+```
+
+```
+services/gateway-service/
+├── src/main/java/com/zjgsu/njb/gateway/
+│   ├── GatewayApplication.java          启动类（必须 REACTIVE）
+│   ├── config/GatewaySecurityProperties.java
+│   ├── security/JwtVerifier.java        验签 + 解析 claims
+│   ├── security/RolePolicy.java         路径 → 角色规则表
+│   ├── security/GatewayAuthFilter.java  全局过滤器：删伪造头 → 验签 → 查角色 → 注入身份
+│   └── web/HealthController.java        /api/health
+└── src/main/resources/application.yml   4 条路由（lb:// 服务名）
+
+services/pet-service/src/main/java/com/zjgsu/njb/pet/
+├── domain/UserAccount.java              sys_user 表，BCrypt 哈希
+├── security/JwtIssuer.java              签发 JWT（HS256）
+├── security/AuthProperties.java         密钥与有效期配置
+├── service/AuthService.java             登录校验（防用户名枚举）
+├── web/AuthController.java              /api/auth/login、/api/auth/me
+├── web/AdminController.java             /api/admin/summary（ADMIN）
+├── web/GatewayTrustFilter.java          直连防护：校验 X-Trusted-Caller
+└── config/SeedAccounts.java             三个测试账号初始化
+
+scripts/auth-test.sh                     认证与鉴权自动测试（可重复运行）
+docs/security.md                         认证流程、权限矩阵、路由表
 ```
 
 ---
