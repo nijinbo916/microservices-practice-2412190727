@@ -678,6 +678,63 @@ docs/security.md                         认证流程、权限矩阵、路由表
 
 ---
 
+## 九、Nacos Config 配置中心（第 10 周）
+
+把连接池、Feign 超时、日志级别、业务参数集中到 Nacos，按 Group 区分 dev / test；
+密码、JWT 密钥等敏感值仍然只走环境变量。
+
+### 9.1 配置清单
+
+| Data ID | Group | 用途 |
+|---|---|---|
+| `pet-service.yaml` | `PETCLINIC_DEV` / `PETCLINIC_TEST` | 宠物服务连接池、日志级别 |
+| `doctor-service.yaml` | `PETCLINIC_DEV` / `PETCLINIC_TEST` | 医生服务连接池、日志级别 |
+| `appointment-service.yaml` | `PETCLINIC_DEV` / `PETCLINIC_TEST` | 连接池、Feign 超时、预约提前天数 |
+| `gateway-service.yaml` | `PETCLINIC_DEV` / `PETCLINIC_TEST` | 网关日志级别 |
+
+源文件在 `nacos-config/dev/` 与 `nacos-config/test/`，完整说明见
+[`docs/configuration.md`](docs/configuration.md)。
+
+### 9.2 本地环境变量怎么设
+
+```bash
+cp .env.example .env          # 只做一次，.env 已被 .gitignore 排除
+```
+
+然后按注释填写 `.env` 里的值。第 10 周相关的只有一项：
+
+```bash
+PETCLINIC_CONFIG_GROUP=PETCLINIC_TEST   # 容器/演示环境；本地开发写 PETCLINIC_DEV
+```
+
+敏感值（数据库密码、`JWT_SECRET`、`TRUSTED_CALLER_SECRET`、Nacos 账号密码）都只存在于
+本地 `.env`，仓库里只有 `.env.example` 的占位符。生成随机密钥：
+
+```bash
+openssl rand -base64 48
+```
+
+### 9.3 发布配置并验证
+
+```bash
+# 起 Nacos 与业务容器（compose 已把 profile 设为 test）
+docker compose up -d
+
+# 发布 dev + test 两套配置，并验证「服务读到配置 + 改完立即生效」
+bash scripts/config-test.sh
+```
+
+脚本会输出每一组 Data ID / Group 的发布与回读结果，最后给出
+`GET /api/config/effective` 的实际返回值，并证明改配置前后容器启动时间不变。
+
+### 9.4 动态修改一个值
+
+Nacos 控制台 `http://localhost:18080` → 配置管理 → 搜索 `appointment-service.yaml` →
+Group 选 `PETCLINIC_TEST` → 把 `petclinic.booking.max-advance-days` 从 `7` 改成 `60` →
+发布。不用重启服务，下一次创建「20 天后」的预约会从 400 变成 201。
+
+---
+
 ## 附：仓库说明
 
 

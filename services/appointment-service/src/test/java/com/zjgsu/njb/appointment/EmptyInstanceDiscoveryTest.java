@@ -42,8 +42,10 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 class EmptyInstanceDiscoveryTest {
 
-    private static final LocalDateTime T1 = LocalDateTime.of(2026, 11, 20, 9, 0);
-    private static final LocalDateTime T2 = LocalDateTime.of(2026, 11, 20, 9, 30);
+    // 用「当前时间 + 10 天」而不是写死日期：写死会在日期过去后触发 @Future 校验，测试变红
+    private static final LocalDateTime T1 = LocalDateTime.now().plusDays(10)
+            .withHour(9).withMinute(0).withSecond(0).withNano(0);
+    private static final LocalDateTime T2 = T1.plusMinutes(30);
 
     @MockitoBean
     private PetFeignClient petFeignClient;
@@ -86,9 +88,9 @@ class EmptyInstanceDiscoveryTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"petId":1,"doctorId":1,
-                                 "slotStart":"2026-11-20T09:00:00","slotEnd":"2026-11-20T09:30:00",
+                                 "slotStart":"%s","slotEnd":"%s",
                                  "reason":"无可用实例"}
-                                """))
+                                """.formatted(T1, T2)))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503))
                 .andExpect(jsonPath("$.error").value("DEPENDENCY_UNAVAILABLE"));

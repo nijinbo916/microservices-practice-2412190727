@@ -1,0 +1,18 @@
+# =====================================================================
+# Data ID : pet-service.yaml
+# Group   : PETCLINIC_TEST
+# 用途    : 自动化测试 / 课堂演示环境（test）
+# =====================================================================
+petclinic:
+  env: test
+
+spring:
+  datasource:
+    hikari:
+      # 容器里会跑冒烟脚本，并发比本地高一点
+      maximum-pool-size: 10
+      minimum-idle: 4
+
+logging:
+  level:
+    com.zjgsu.njb.pet: info

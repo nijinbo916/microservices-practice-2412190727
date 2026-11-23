@@ -1,0 +1,31 @@
+# =====================================================================
+# Data ID : appointment-service.yaml
+# Group   : PETCLINIC_DEV
+# 用途    : 本地开发环境（dev）的非敏感配置
+#
+# 本文件同时是「动态配置验证」的对象：
+#   petclinic.booking.max-advance-days = 预约最多提前多少天
+#   改这个值不需要重启、不需要重新打包，下一次请求即生效。
+# =====================================================================
+petclinic:
+  env: dev
+  booking:
+    max-advance-days: 30
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+
+logging:
+  level:
+    com.zjgsu.njb.appointment: debug

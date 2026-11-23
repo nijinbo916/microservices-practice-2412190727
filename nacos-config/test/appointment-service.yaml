@@ -1,0 +1,31 @@
+# =====================================================================
+# Data ID : appointment-service.yaml
+# Group   : PETCLINIC_TEST
+# 用途    : 自动化测试 / 课堂演示环境（test）
+#
+# 动态验证：config-test.sh 把 max-advance-days 从 7 改成 60，
+# 再调 POST /api/appointments，原本 400 的请求会变成 201，服务不重启。
+# =====================================================================
+petclinic:
+  env: test
+  booking:
+    max-advance-days: 7
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 4
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            # test 环境超时收紧，验证「配置中心能统一改调用参数」
+            connect-timeout: 2000
+            read-timeout: 4000
+
+logging:
+  level:
+    com.zjgsu.njb.appointment: info

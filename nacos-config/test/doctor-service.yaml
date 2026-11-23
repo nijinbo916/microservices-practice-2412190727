@@ -1,0 +1,17 @@
+# =====================================================================
+# Data ID : doctor-service.yaml
+# Group   : PETCLINIC_TEST
+# 用途    : 自动化测试 / 课堂演示环境（test）
+# =====================================================================
+petclinic:
+  env: test
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 4
+
+logging:
+  level:
+    com.zjgsu.njb.doctor: info

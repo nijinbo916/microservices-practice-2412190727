@@ -1,5 +1,6 @@
 package com.zjgsu.njb.appointment.service;
 
+import com.zjgsu.njb.appointment.config.BookingProperties;
 import com.zjgsu.njb.appointment.domain.Appointment;
 import com.zjgsu.njb.appointment.domain.AppointmentStatus;
 import com.zjgsu.njb.appointment.dto.AppointmentResponse;
@@ -38,13 +39,16 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final PetClient petClient;
     private final DoctorClient doctorClient;
+    private final BookingProperties bookingProperties;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
                               PetClient petClient,
-                              DoctorClient doctorClient) {
+                              DoctorClient doctorClient,
+                              BookingProperties bookingProperties) {
         this.appointmentRepository = appointmentRepository;
         this.petClient = petClient;
         this.doctorClient = doctorClient;
+        this.bookingProperties = bookingProperties;
     }
 
     /** 创建预约（核心跨服务业务流程入口）。 */
@@ -53,6 +57,17 @@ public class AppointmentService {
         // 规则 1：时段自身必须合法
         if (!request.slotEnd().isAfter(request.slotStart())) {
             throw new IllegalArgumentException("预约结束时间必须晚于开始时间");
+        }
+
+        // 规则 1.5（第 10 周）：最多只能预约未来 N 天内的号源
+        // N 来自 Nacos Config 的 petclinic.booking.max-advance-days，
+        // 改配置立即生效（@RefreshScope），不需要重启或重新打包。
+        int maxAdvanceDays = bookingProperties.getMaxAdvanceDays();
+        LocalDate latestBookableDay = LocalDate.now().plusDays(maxAdvanceDays);
+        if (request.slotStart().toLocalDate().isAfter(latestBookableDay)) {
+            throw new IllegalArgumentException(
+                    "预约最多提前 " + maxAdvanceDays + " 天，本次选择的日期超出范围："
+                            + request.slotStart().toLocalDate());
         }
 
         // 步骤 2/3：跨服务 HTTP 校验（强依赖，失败即中止，绝不跳过校验写入本地数据）

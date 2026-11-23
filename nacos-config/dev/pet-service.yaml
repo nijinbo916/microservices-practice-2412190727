@@ -1,0 +1,20 @@
+# =====================================================================
+# Data ID : pet-service.yaml
+# Group   : PETCLINIC_DEV
+# 用途    : 本地开发环境（dev）的非敏感配置
+# 发布方式: bash scripts/config-test.sh  （或 Nacos 控制台手动导入）
+# 说明    : 密码、JWT_SECRET 等敏感值不在配置中心，仍走 .env / 环境变量
+# =====================================================================
+petclinic:
+  env: dev
+
+spring:
+  datasource:
+    hikari:
+      # 本地开发单实例，连接池不需要很大
+      maximum-pool-size: 5
+      minimum-idle: 2
+
+logging:
+  level:
+    com.zjgsu.njb.pet: debug

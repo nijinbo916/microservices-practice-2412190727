@@ -48,6 +48,11 @@
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
+        <!-- 第 10 周：Nacos Config 配置中心（Data ID = 服务名.yaml，Group 区分环境） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
         <!-- 第 08 周：OpenFeign 声明式跨服务调用（底层自动使用 Spring Cloud LoadBalancer 按服务名负载均衡） -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>

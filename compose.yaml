@@ -117,7 +117,7 @@ services:
       nacos:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: test,docker   # test 环境 = test 配置组 + docker 容器参数
       DB_USERNAME: ${PET_DB_USER}
       DB_PASSWORD: ${PET_DB_PASSWORD}
       NACOS_SERVER_ADDR: nacos:8848
@@ -126,6 +126,8 @@ services:
       NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
       NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
       NACOS_REGISTER_ENABLED: "true"
+      # 第 10 周：配置中心分组（test 环境），Data ID = 服务名.yaml
+      PETCLINIC_CONFIG_GROUP: PETCLINIC_TEST
       # ---- 第 09 周：认证与网关信任 ----
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: ${JWT_ISSUER:-petclinic-auth}
@@ -163,7 +165,7 @@ services:
       nacos:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: test,docker   # test 环境 = test 配置组 + docker 容器参数
       DB_USERNAME: ${DOCTOR_DB_USER}
       DB_PASSWORD: ${DOCTOR_DB_PASSWORD}
       NACOS_SERVER_ADDR: nacos:8848
@@ -172,6 +174,8 @@ services:
       NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
       NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
       NACOS_REGISTER_ENABLED: "true"
+      # 第 10 周：配置中心分组（test 环境），Data ID = 服务名.yaml
+      PETCLINIC_CONFIG_GROUP: PETCLINIC_TEST
       TZ: Asia/Shanghai
     ports:
       # 仅供本机调试；对外只允许走 gateway
@@ -202,7 +206,7 @@ services:
       nacos:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: test,docker   # test 环境 = test 配置组 + docker 容器参数
       DB_USERNAME: ${APPOINTMENT_DB_USER}
       DB_PASSWORD: ${APPOINTMENT_DB_PASSWORD}
       NACOS_SERVER_ADDR: nacos:8848
@@ -211,6 +215,8 @@ services:
       NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
       NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
       NACOS_REGISTER_ENABLED: "true"
+      # 第 10 周：配置中心分组（test 环境），Data ID = 服务名.yaml
+      PETCLINIC_CONFIG_GROUP: PETCLINIC_TEST
       # 注意：已删除 PET_SERVICE_URL / DOCTOR_SERVICE_URL，
       # 跨服务地址改由 Nacos 服务名 + 实例发现决定，不再使用 compose 固定 DNS
       # 第 09 周：跨服务调用要带上与网关相同的可信凭证，
@@ -251,13 +257,15 @@ services:
       nacos:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: test,docker   # test 环境 = test 配置组 + docker 容器参数
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_USERNAME: ${NACOS_USERNAME}
       NACOS_PASSWORD: ${NACOS_PASSWORD}
       NACOS_GROUP: ${NACOS_GROUP:-PERSONAL_GROUP}
       NACOS_NAMESPACE: ${NACOS_NAMESPACE:-}
       NACOS_REGISTER_ENABLED: "true"
+      # 第 10 周：配置中心分组（test 环境），Data ID = 服务名.yaml
+      PETCLINIC_CONFIG_GROUP: PETCLINIC_TEST
       # 必须与 pet-service 的 JWT_SECRET 完全一致，否则验签全失败
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: ${JWT_ISSUER:-petclinic-auth}

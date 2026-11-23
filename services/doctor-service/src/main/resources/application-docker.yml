@@ -4,6 +4,9 @@
 # 种子数据用幂等 SQL，容器反复重启医生表始终 3 行
 # =====================================================================
 spring:
+  # 第 10 周：容器/演示环境（test）从 Nacos 拉取配置，Group = PETCLINIC_TEST
+  config:
+    import: optional:nacos:${spring.application.name}.yaml?group=${PETCLINIC_CONFIG_GROUP:PETCLINIC_TEST}&refreshEnabled=true
   # ---- Nacos 服务注册与发现（第 07 周）----
   # 地址与凭据全部来自环境变量；分组 PERSONAL_GROUP 为个人项目专用，不与课堂示例混用
   cloud:

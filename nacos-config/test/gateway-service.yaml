@@ -1,0 +1,11 @@
+# =====================================================================
+# Data ID : gateway-service.yaml
+# Group   : PETCLINIC_TEST
+# 用途    : 自动化测试 / 课堂演示环境（test）
+# =====================================================================
+petclinic:
+  env: test
+
+logging:
+  level:
+    com.zjgsu.njb.gateway: info

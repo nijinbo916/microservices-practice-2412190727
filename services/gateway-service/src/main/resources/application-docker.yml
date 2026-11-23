@@ -6,6 +6,9 @@
 # 避免两处配置漂移（改了默认值忘了改 docker）。
 # =====================================================================
 spring:
+  # 第 10 周：容器/演示环境（test）从 Nacos 拉取配置，Group = PETCLINIC_TEST
+  config:
+    import: optional:nacos:${spring.application.name}.yaml?group=${PETCLINIC_CONFIG_GROUP:PETCLINIC_TEST}&refreshEnabled=true
   cloud:
     nacos:
       discovery:
