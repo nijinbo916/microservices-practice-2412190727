@@ -116,21 +116,21 @@ echo "=============================================="
 # 注意：mysql 客户端必须显式 --default-character-set=utf8mb4，否则中文按 latin1
 # 入库变成乱码，API 返回的 petName 就不再是「e2e宠物」。先清旧种子行保证幂等。
 # 宠物表：name/species/breed/owner_name/owner_phone/birthday/weight_kg/allergy_history/created_at
-docker compose exec -T mysql mysql --default-character-set=utf8mb4 -upet_user -p"${PET_DB_PASSWORD}" petclinic_pet 2>/dev/null <<'SQL'
+docker compose exec -T mysql-pet mysql --default-character-set=utf8mb4 -upet_user -p"${PET_DB_PASSWORD}" petclinic_pet 2>/dev/null <<'SQL'
 DELETE FROM pet WHERE name = 'e2e宠物';
 INSERT INTO pet (name, species, breed, owner_name, owner_phone, birthday, weight_kg, allergy_history, created_at)
 VALUES ('e2e宠物', '犬', '金毛', '倪同学', '13800000000', '2023-05-01', 12.5, NULL, NOW());
 SELECT CONCAT('PET_ID=', id) FROM pet WHERE name = 'e2e宠物' LIMIT 1;
 SQL
 # 医生表：name/specialty/daily_capacity
-docker compose exec -T mysql mysql --default-character-set=utf8mb4 -udoctor_user -p"${DOCTOR_DB_PASSWORD}" petclinic_doctor 2>/dev/null <<'SQL'
+docker compose exec -T mysql-doctor mysql --default-character-set=utf8mb4 -udoctor_user -p"${DOCTOR_DB_PASSWORD}" petclinic_doctor 2>/dev/null <<'SQL'
 DELETE FROM doctor WHERE name = 'e2e医生';
 INSERT INTO doctor (name, specialty, daily_capacity) VALUES ('e2e医生', '内科', 10);
 SELECT CONCAT('DOCTOR_ID=', id) FROM doctor WHERE name = 'e2e医生' LIMIT 1;
 SQL
 
-PET_ID=$(docker compose exec -T mysql mysql --default-character-set=utf8mb4 -upet_user -p"${PET_DB_PASSWORD}" petclinic_pet -N -e "SELECT id FROM pet WHERE name='e2e宠物' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
-DOCTOR_ID=$(docker compose exec -T mysql mysql --default-character-set=utf8mb4 -udoctor_user -p"${DOCTOR_DB_PASSWORD}" petclinic_doctor -N -e "SELECT id FROM doctor WHERE name='e2e医生' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
+PET_ID=$(docker compose exec -T mysql-pet mysql --default-character-set=utf8mb4 -upet_user -p"${PET_DB_PASSWORD}" petclinic_pet -N -e "SELECT id FROM pet WHERE name='e2e宠物' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
+DOCTOR_ID=$(docker compose exec -T mysql-doctor mysql --default-character-set=utf8mb4 -udoctor_user -p"${DOCTOR_DB_PASSWORD}" petclinic_doctor -N -e "SELECT id FROM doctor WHERE name='e2e医生' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
 case "$PET_ID" in ''|*[!0-9]*) bad "种子宠物 id 异常：$PET_ID";; *) ok "种子宠物 id=$PET_ID，种子医生 id=$DOCTOR_ID";; esac
 
 # ---- 构造不冲突的预约时段（今天 09:00 + N 分钟起，30 分钟） ----
@@ -186,7 +186,7 @@ echo " 5) 失败场景：pet-service 全部实例下线 → 503 且零写入"
 echo "=============================================="
 # 计数直接查数据库（不走 API：列表接口带远端增强，依赖下线时会拖慢响应）
 appt_db_count() {
-  docker compose exec -T mysql mysql --default-character-set=utf8mb4 \
+  docker compose exec -T mysql-appointment mysql --default-character-set=utf8mb4 \
     -uappointment_user -p"${APPOINTMENT_DB_PASSWORD}" petclinic_appointment \
     -N -e "SELECT COUNT(*) FROM appointment" 2>/dev/null | tr -d '[:space:]'
 }

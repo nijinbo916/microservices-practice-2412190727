@@ -30,7 +30,7 @@ spring:
               logger-level: basic
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_appointment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    url: ${DB_URL:jdbc:mysql://mysql-appointment:3306/petclinic_appointment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:appointment_user}
     password: ${DB_PASSWORD:appointment_pass}
     driver-class-name: com.mysql.cj.jdbc.Driver

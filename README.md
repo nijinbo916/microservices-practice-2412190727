@@ -395,11 +395,15 @@ docker volume inspect petclinic-mysql-data
 单体按数据归属拆分为三个独立 Spring Boot 工程（设计详见
 [docs/microservices-design.md](docs/microservices-design.md)）：
 
-| 服务 | 宿主机端口 | 独立数据库 | 职责 |
+| 服务 | 宿主机端口 | 独立 MySQL 实例 | 职责 |
 | --- | --- | --- | --- |
-| `services/pet-service` | 8084 | `petclinic_pet` | 宠物档案（数据唯一权威来源） |
-| `services/doctor-service` | 8082 | `petclinic_doctor` | 医生主数据与每日号源上限 |
-| `services/appointment-service` | 8083 | `petclinic_appointment` | 预约流程与号源规则（跨服务 HTTP 校验） |
+| `services/pet-service` | 8084 | `mysql-pet` :3307 · `petclinic_pet` | 宠物档案（数据唯一权威来源） |
+| `services/doctor-service` | 8082 | `mysql-doctor` :3308 · `petclinic_doctor` | 医生主数据与每日号源上限 |
+| `services/appointment-service` | 8083 | `mysql-appointment` :3309 · `petclinic_appointment` | 预约流程与号源规则（跨服务 HTTP 校验） |
+
+数据库隔离是**实例级**的（Database per Service）：每个服务独占一个 MySQL 8.4.11 容器、
+一个库、一个业务账号（由镜像的 `MYSQL_DATABASE` / `MYSQL_USER` 自动建库授权）。
+任何一个 MySQL 实例挂掉只影响对应服务，不存在「共享实例挂了全挂」的问题。
 
 服务间只通过 HTTP 协作：创建预约前，appointment-service 用 RestTemplate 调用
 pet-service / doctor-service 校验宠物与医生（连接超时 3s / 读取超时 5s）。**第 07 周起地址不再写死**，
@@ -411,8 +415,8 @@ pet-service / doctor-service 校验宠物与医生（连接超时 3s / 读取超
 
 ```bash
 cp .env.example .env            # 第一次使用
-docker compose up -d --build    # 启动 mysql + 三个微服务
-docker compose ps               # 四个容器应均为 Up (healthy)
+docker compose up -d --build    # 启动 nacos + 三个 mysql 实例 + 三个微服务 + 网关
+docker compose ps               # 8 个容器应均为 Up (healthy)
 ```
 
 ### 6.2 一键验证
@@ -465,7 +469,7 @@ cd services/appointment-service && ./mvnw test   # 13 个用例（含模拟远�
 ### 6.5 停止
 
 ```bash
-docker compose down     # 停止并删容器，保留命名数据卷 petclinic-ms-mysql-data
+docker compose down     # 停止并删容器，保留三个数据卷 petclinic-ms-mysql-{pet,doctor,appointment}-data
 ```
 
 ---
@@ -556,7 +560,7 @@ cd services/appointment-service && ./mvnw test   # 13 个用例（含实例列�
 ### 7.6 停止
 
 ```bash
-docker compose down     # 保留数据卷：petclinic-ms-mysql-data / petclinic-nacos-data
+docker compose down     # 保留数据卷：petclinic-ms-mysql-{pet,doctor,appointment}-data / petclinic-nacos-data
 ```
 
 ---
@@ -743,10 +747,10 @@ Group 选 `PETCLINIC_TEST` → 把 `petclinic.booking.max-advance-days` 从 `7` 
 ```
 .
 ├── README.md                     # 项目入口：背景、功能设计、运行说明与演进方向
-├── compose.yaml                  # 第 06 周：mysql + 三个微服务编排（健康检查、命名卷、服务名互通）
+├── compose.yaml                  # 第 06 周：三个 mysql 实例 + 三个微服务编排（健康检查、命名卷、服务名互通）
 ├── .env.example                  # 环境变量模板（复制为 .env 使用）
 ├── docker/
-│   └── mysql-init/               # 第 06 周：MySQL 首次初始化（三库三账号，最小权限）
+│   ├── mysql-init/               # 第 06 周：MySQL 首次初始化（已废弃，现为每服务独立实例，见 compose.yaml）
 ├── scripts/
 │   ├── smoke-test.sh             # 第 06 周：微服务冒烟测试（从仓库根目录运行）
 │   └── docker-smoke-test.sh      # 第 05 周：单体容器化接口验证脚本

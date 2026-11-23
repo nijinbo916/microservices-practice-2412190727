@@ -19,7 +19,7 @@ spring:
         register-enabled: ${NACOS_REGISTER_ENABLED:true}
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://mysql:3306/petclinic_pet?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    url: ${DB_URL:jdbc:mysql://mysql-pet:3306/petclinic_pet?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:pet_user}
     password: ${DB_PASSWORD:pet_pass}
     driver-class-name: com.mysql.cj.jdbc.Driver
