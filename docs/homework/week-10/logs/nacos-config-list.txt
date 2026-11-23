@@ -1,0 +1,15 @@
+Group PETCLINIC_DEV    共 4 个配置
+Data ID                      Group            Type     MD5
+------------------------------------------------------------------------------
+appointment-service.yaml     PETCLINIC_DEV    yaml     3c5b95b833f4
+doctor-service.yaml          PETCLINIC_DEV    yaml     36f37899b36a
+gateway-service.yaml         PETCLINIC_DEV    yaml     54635798d79f
+pet-service.yaml             PETCLINIC_DEV    yaml     be5e88f21c76
+
+Group PETCLINIC_TEST   共 4 个配置
+Data ID                      Group            Type     MD5
+------------------------------------------------------------------------------
+appointment-service.yaml     PETCLINIC_TEST   yaml     052cf1361d4a
+doctor-service.yaml          PETCLINIC_TEST   yaml     5affb453d7fa
+gateway-service.yaml         PETCLINIC_TEST   yaml     5787251053f4
+pet-service.yaml             PETCLINIC_TEST   yaml     1ef7056aa81c

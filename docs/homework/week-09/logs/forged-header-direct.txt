@@ -1,0 +1,6 @@
+GET /api/admin/summary  owner token + 伪造 X-Auth-Roles: ADMIN  ->  HTTP 403
+  {"timestamp":"2026-11-16T15:05:04.877157489+08:00","status":403,"error":"FORBIDDEN","message":"需要角色 [ADMIN]，当前角色 [OWNER]","path":"/api/admin/summary"}
+GET http://127.0.0.1:8084/api/pets  （绕过网关，无凭证）  ->  HTTP 401
+  {"timestamp":"2026-11-16T15:05:04.904034516+08:00","status":401,"error":"DIRECT_ACCESS_DENIED","message":"请求必须经过 API Gateway（缺少可信网关凭证）","path":"/api/pets"}
+GET http://127.0.0.1:8084/api/pets  （直连 + 伪造身份头）  ->  HTTP 401
+  {"timestamp":"2026-11-16T15:05:04.910213436+08:00","status":401,"error":"DIRECT_ACCESS_DENIED","message":"请求必须经过 API Gateway（缺少可信网关凭证）","path":"/api/pets"}

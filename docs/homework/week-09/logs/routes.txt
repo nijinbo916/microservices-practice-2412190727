@@ -1,0 +1,5 @@
+pet-service  ->  lb://pet-service  |  Paths: [/api/pets/**], match trailing slash: true)
+doctor-service  ->  lb://doctor-service  |  Paths: [/api/doctors/**], match trailing slash: true)
+appointment-service  ->  lb://appointment-service  |  Paths: [/api/appointments/**], match trailing slash: true)
+auth-service  ->  lb://pet-service  |  Paths: [/api/auth/**, /api/admin/**], match trailing slash: true)
+共 4 条路由

@@ -1,0 +1,1 @@
+{"timestamp":"2026-11-23T13:23:41.773865856","status":400,"error":"BAD_REQUEST","message":"预约最多提前 7 天，本次选择的日期超出范围：2026-12-13","path":"/api/appointments"}

@@ -1,0 +1,14 @@
+{
+  "service": "appointment-service",
+  "activeProfiles": [
+    "test",
+    "docker"
+  ],
+  "env": "test",
+  "configGroup": "PETCLINIC_TEST",
+  "configServer": "nacos:8848",
+  "maxAdvanceDays": 60,
+  "hikariMaxPoolSize": "10",
+  "feignReadTimeoutMs": "4000",
+  "appointmentLogLevel": "info"
+}

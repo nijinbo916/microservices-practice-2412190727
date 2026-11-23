@@ -1,0 +1,6 @@
+# 场景 1：正确用户名 + 错误密码
+POST /api/auth/login  password=definitely-wrong  ->  HTTP 401
+  {"timestamp":"2026-11-16T15:05:04.607792974","status":401,"error":"INVALID_CREDENTIALS","message":"用户名或密码错误","path":"/api/auth/login"}
+# 场景 2：伪造 token（签名不对）
+GET /api/pets  Authorization: Bearer not.a.real.token  ->  HTTP 401
+  {"timestamp":"2026-11-16T15:05:04.621291592+08:00","status":401,"error":"INVALID_TOKEN","message":"token 无效、签名不符或已过期","path":"/api/pets"}

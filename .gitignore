@@ -26,6 +26,10 @@ Thumbs.db
 *.log
 logs/
 
+# 例外：作业证据日志属于交付物，必须入库（上面两条只针对构建/运行产生的临时日志）
+!docs/homework/**/logs/
+!docs/homework/**/logs/**
+
 # 本地 Maven 种子包（加速镜像构建用，不入库）
 services/*/docker/m2-local.tgz
 

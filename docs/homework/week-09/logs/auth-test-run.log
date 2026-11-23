@@ -1,0 +1,42 @@
+==============================================================
+ 认证与鉴权自动测试
+ 网关: http://localhost:8080
+ 直连: http://127.0.0.1:8084
+==============================================================
+0. 网关健康检查（公开入口，不需要 token）
+  PASS  GET /api/health 无需认证  (HTTP 200)
+1. 未登录访问受保护接口，应失败（401）
+  PASS  无 token 访问 /api/pets  (HTTP 401)
+1b. 伪造身份头但没有 token，应失败（401）
+  PASS  只有 X-Auth-Roles 没有 token  (HTTP 401)
+2. 登录获取 Token
+  PASS  admin 登录  (HTTP 200)  role=ADMIN
+  PASS  owner 登录  (HTTP 200)
+  PASS  doctor 登录  (HTTP 200)
+2b. 错误密码应失败（401）
+  PASS  admin 用错密码登录  (HTTP 401)
+2c. 假 token 应失败（401）
+  PASS  伪造 token 访问 /api/pets  (HTTP 401)
+3. 携带 Token 访问受保护接口，应成功（200）
+  PASS  admin token 访问 /api/pets  (HTTP 200)
+  PASS  admin token 访问 /api/auth/me  (HTTP 200)
+        身份: {"username":"admin","userId":1,"roles":["ADMIN"],"authenticated":true}
+  PASS  admin token 访问 /api/doctors（路由 2）  (HTTP 200)
+  PASS  admin token 访问 /api/appointments（路由 3）  (HTTP 200)
+4. 低权限 Token 访问管理接口，应失败（403）
+  PASS  owner token 访问 /api/admin/summary  (HTTP 403)  越权被拦
+  PASS  doctor token 访问 /api/admin/summary  (HTTP 403)  越权被拦
+  PASS  admin token 访问 /api/admin/summary  (HTTP 200)  角色放行
+        汇总: {"petCount":29,"userCount":3,"roles":{"OWNER":1,"ADMIN":1,"DOCTOR":1},"requestedBy":"admin"}
+5. 客户端伪造 X-Auth-Roles 头，应无效（网关先删再验签）
+  PASS  owner token + 伪造 ADMIN 头  (HTTP 403)  伪造头被剥离
+6. 绕过网关直连 pet-service，应失败（401）
+  PASS  直连 8084 无凭证  (HTTP 401)
+  PASS  直连 + 伪造身份头  (HTTP 401)  下游校验网关凭证
+7. 删除接口只有 ADMIN：owner 403，admin 通过鉴权（404 说明过了鉴权这一关）
+  PASS  owner 删宠物  (HTTP 403)
+  PASS  admin 删不存在的宠物（鉴权通过，业务 404）  (HTTP 404)
+==============================================================
+ 全部通过：20 项
+==============================================================
+[safe-delete][SAFE_DELETE_INVALID_PATH] embedded drive prefix is not allowed

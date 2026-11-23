@@ -1,0 +1,6 @@
+GET /api/admin/summary  （owner，OWNER 角色）  ->  HTTP 403
+  {"timestamp":"2026-11-16T15:05:04.768118275+08:00","status":403,"error":"FORBIDDEN","message":"需要角色 [ADMIN]，当前角色 [OWNER]","path":"/api/admin/summary"}
+GET /api/admin/summary  （doctor，DOCTOR 角色）  ->  HTTP 403
+  {"timestamp":"2026-11-16T15:05:04.780771135+08:00","status":403,"error":"FORBIDDEN","message":"需要角色 [ADMIN]，当前角色 [DOCTOR]","path":"/api/admin/summary"}
+GET /api/admin/summary  （admin，ADMIN 角色）  ->  HTTP 200
+  {"petCount":29,"userCount":3,"roles":{"OWNER":1,"ADMIN":1,"DOCTOR":1},"requestedBy":"admin"}

@@ -1,0 +1,2 @@
+GET http://localhost:8080/api/health -> HTTP 200
+{"service":"gateway-service","timestamp":"2026-11-16T15:05:04.081065860+08:00","status":"UP"}

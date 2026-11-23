@@ -1,0 +1,7 @@
+PS> docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}'
+petclinic-gateway	Up 7 minutes (healthy)	0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+petclinic-doctor-service	Up 10 minutes (healthy)	127.0.0.1:8082->8080/tcp
+petclinic-appointment-service	Up 10 minutes (healthy)	127.0.0.1:8083->8080/tcp
+petclinic-pet-service	Up 10 minutes (healthy)	127.0.0.1:8084->8080/tcp
+petclinic-nacos	Up 13 minutes (healthy)	0.0.0.0:8848->8848/tcp, [::]:8848->8848/tcp, 0.0.0.0:9848->9848/tcp, [::]:9848->9848/tcp, 0.0.0.0:18080->8080/tcp, [::]:18080->8080/tcp
+petclinic-mysql	Up 13 minutes (healthy)	0.0.0.0:3307->3306/tcp, [::]:3307->3306/tcp

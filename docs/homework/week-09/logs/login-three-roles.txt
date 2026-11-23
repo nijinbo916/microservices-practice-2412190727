@@ -1,0 +1,6 @@
+POST /api/auth/login  username=admin  ->  HTTP 200
+  {"accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWI...", "tokenType": "Bearer", "expiresIn": 3600, "expiresAt": "2026-11-16T08:05:04.199431208Z", "username": "admin", "displayName": "系统管理员", "role": "ADMIN"}
+POST /api/auth/login  username=owner  ->  HTTP 200
+  {"accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWI...", "tokenType": "Bearer", "expiresIn": 3600, "expiresAt": "2026-11-16T08:05:04.310696874Z", "username": "owner", "displayName": "李女士", "role": "OWNER"}
+POST /api/auth/login  username=doctor  ->  HTTP 200
+  {"accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWI...", "tokenType": "Bearer", "expiresIn": 3600, "expiresAt": "2026-11-16T08:05:04.477421810Z", "username": "doctor", "displayName": "王医生", "role": "DOCTOR"}

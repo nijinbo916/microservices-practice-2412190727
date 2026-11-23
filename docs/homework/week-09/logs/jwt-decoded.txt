@@ -1,0 +1,18 @@
+accessToken（前 40 字符）: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiI...
+
+HEADER:
+{
+  "alg": "HS256"
+}
+
+PAYLOAD:
+{
+  "sub": "admin",
+  "uid": 1,
+  "roles": [
+    "ADMIN"
+  ],
+  "iss": "petclinic-auth",
+  "iat": 1794812704,
+  "exp": 1794816304
+}

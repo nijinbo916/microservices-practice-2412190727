@@ -1,0 +1,53 @@
+==============================================================
+ 第 10 周 · Nacos Config 配置中心验证
+ Nacos   : http://localhost:8848（namespace=public）
+ Group   : PETCLINIC_TEST
+ 服务    : http://127.0.0.1:8083
+==============================================================
+1. 登录 Nacos 获取 accessToken
+  PASS  Nacos 登录（200）
+2. 发布 dev / test 两套配置（8 个 Data ID）
+  PASS  发布 PETCLINIC_DEV / pet-service.yaml
+  PASS  发布 PETCLINIC_DEV / doctor-service.yaml
+  PASS  发布 PETCLINIC_DEV / appointment-service.yaml
+  PASS  发布 PETCLINIC_DEV / gateway-service.yaml
+  PASS  发布 PETCLINIC_TEST / pet-service.yaml
+  PASS  发布 PETCLINIC_TEST / doctor-service.yaml
+  PASS  发布 PETCLINIC_TEST / appointment-service.yaml
+  PASS  发布 PETCLINIC_TEST / gateway-service.yaml
+3. 回读校验：Data ID / Group / 是否含关键配置项
+  pet-service.yaml           PETCLINIC_DEV    含 maximum-pool-size: 5
+  pet-service.yaml           PETCLINIC_TEST   含 maximum-pool-size: 10
+  doctor-service.yaml        PETCLINIC_DEV    含 maximum-pool-size: 4
+  doctor-service.yaml        PETCLINIC_TEST   含 maximum-pool-size: 8
+  appointment-service.yaml   PETCLINIC_DEV    含 max-advance-days: 30
+  appointment-service.yaml   PETCLINIC_TEST   含 max-advance-days: 7
+  gateway-service.yaml       PETCLINIC_DEV    含 com.zjgsu.njb.gateway: debug
+  gateway-service.yaml       PETCLINIC_TEST   含 com.zjgsu.njb.gateway: info
+4. 服务实际读取到的配置（GET /api/config/effective）
+{"service":"appointment-service","activeProfiles":["test","docker"],"env":"test","configGroup":"PETCLINIC_TEST","configServer":"nacos:8848","maxAdvanceDays":7,"hikariMaxPoolSize":"10","feignReadTimeoutMs":"4000","appointmentLogLevel":"info"}
+
+  PASS  配置分组 = PETCLINIC_TEST（PETCLINIC_TEST）
+  PASS  环境标记 = test（test）
+  PASS  连接池最大值 = 10（来自 Nacos）（10）
+  PASS  Feign 读超时 = 4000（来自 Nacos）（4000）
+  PASS  预约提前天数 = 7（来自 Nacos）（7）
+5. 动态验证：先证「20 天后」被规则拒绝（400）
+  PASS  admin 登录（200）
+  使用 petId=1 doctorId=1（取自真实接口）
+  PASS  改配置前创建 2026-12-13 的预约（400）
+  PASS  拒绝原因包含「最多提前 7 天」
+6. 改 Nacos 配置（7 → 60），不重启任何服务
+  PASS  发布 PETCLINIC_TEST / appointment-service.yaml
+  等待客户端刷新（最多 30 秒，Nacos 长轮询推送）
+  PASS  不重启，maxAdvanceDays 变为 60（60）
+  PASS  改配置后同一请求创建成功（201）
+  PASS  容器启动时间未变（没有重启）（2026-11-23T05:19:23.924573351Z）
+7. 还原：把配置改回 7，并取消第 6 步创建的预约
+  PASS  发布 PETCLINIC_TEST / appointment-service.yaml
+  PASS  配置恢复为 7（7）
+  PASS  取消验证用预约 id=29（200）
+--------------------------------------------------------------
+结果：32 项全部通过
+[safe-delete][SAFE_DELETE_INVALID_PATH] embedded drive prefix is not allowed
+[safe-delete][SAFE_DELETE_INVALID_PATH] embedded drive prefix is not allowed

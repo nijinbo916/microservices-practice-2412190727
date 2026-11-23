@@ -1,0 +1,4 @@
+GET /api/pets  （无 Authorization 头）  ->  HTTP 401
+  {"timestamp":"2026-11-16T15:05:04.635666169+08:00","status":401,"error":"UNAUTHENTICATED","message":"缺少 Authorization: Bearer <token>","path":"/api/pets"}
+GET /api/pets  （admin token）  ->  HTTP 200
+  [{"id":1,"name":"冒烟测试宠物144544","species":"犬","breed":"金毛","ownerName":"倪先生","ownerPhone":"13800000001","birthday":"2021-05-20","weightKg":28.50,"allergyHistory":"无","createdAt":"2026-10-26T14:45:44.688005"},{"id":2,"name...
